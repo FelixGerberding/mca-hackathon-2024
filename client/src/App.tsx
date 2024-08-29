@@ -19,7 +19,7 @@ interface ProjectileProps {
   direction: "N" | "NE" | "E" | "SE" | "S" | "SW" | "W" | "NW";
 }
 
-const Player: React.FC<PlayerProps> = ({ x, y, direction, id }) => {
+const Player: React.FC<PlayerProps> = ({ direction, id }) => {
   const rotation = {
     N: "-45deg", // NE adjusted to point N
     NE: "0deg", // No adjustment needed, as it's already NE
@@ -43,7 +43,7 @@ const Player: React.FC<PlayerProps> = ({ x, y, direction, id }) => {
   );
 };
 
-const Projectile: React.FC<ProjectileProps> = ({ x, y, direction }) => {
+const Projectile: React.FC<ProjectileProps> = ({ direction }) => {
   const rotation = {
     N: "0deg",
     NE: "45deg",
