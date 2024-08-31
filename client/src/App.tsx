@@ -1,133 +1,377 @@
-import React, { useEffect, useState } from "react";
-import "./App.css";
-import { ArrowUp, Rocket } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { motion, AnimatePresence } from "framer-motion";
+import { Progress } from "@/components/ui/progress";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import Countdown from "react-countdown";
 
-const GRID_SIZE = 30;
-
-const playerColors = ["red", "blue", "green", "purple"];
-
-interface PlayerProps {
+type Player = {
+  id: string;
+  name: string;
   x: number;
   y: number;
-  direction: "N" | "NE" | "E" | "SE" | "S" | "SW" | "W" | "NW";
-  id: number;
-}
+  rotation: number;
+  color: string;
+  health: number;
+  entityType: "PLAYER";
+};
 
-interface ProjectileProps {
+type Projectile = {
+  id: string;
   x: number;
   y: number;
-  direction: "N" | "NE" | "E" | "SE" | "S" | "SW" | "W" | "NW";
-}
-
-const Player: React.FC<PlayerProps> = ({ direction, id }) => {
-  const rotation = {
-    N: "-45deg", // NE adjusted to point N
-    NE: "0deg", // No adjustment needed, as it's already NE
-    E: "45deg", // NE adjusted to point E
-    SE: "90deg", // NE adjusted to point SE
-    S: "135deg", // NE adjusted to point S
-    SW: "180deg", // NE adjusted to point SW
-    W: "225deg", // NE adjusted to point W
-    NW: "270deg", // NE adjusted to point NW
-  };
-  return (
-    <div
-      className="player"
-      style={{
-        color: playerColors[id - 1],
-        transform: `rotate(${rotation[direction]})`,
-      }}
-    >
-      <Rocket />
-    </div>
-  );
+  rotation: number;
+  entityType: "PROJECTILE";
 };
 
-const Projectile: React.FC<ProjectileProps> = ({ direction }) => {
-  const rotation = {
-    N: "0deg",
-    NE: "45deg",
-    E: "90deg",
-    SE: "135deg",
-    S: "180deg",
-    SW: "225deg",
-    W: "270deg",
-    NW: "315deg",
-  };
-  return (
-    <div
-      className="projectile"
-      style={{ transform: `rotate(${rotation[direction]})` }}
-    >
-      <ArrowUp />
-    </div>
-  );
+type GameState = {
+  tick: string;
+  entities: (Player | Projectile)[];
 };
 
-const App: React.FC = () => {
-  const [players, setPlayers] = useState<PlayerProps[]>([
-    { x: 0, y: 0, direction: "N", id: 1 },
-    { x: 10, y: 0, direction: "E", id: 2 },
-    { x: 0, y: 10, direction: "S", id: 3 },
-    { x: 10, y: 10, direction: "W", id: 4 },
-  ]);
-  const [, setWs] = useState<WebSocket | null>(null);
-  const [projectiles] = useState<ProjectileProps[]>([
-    { x: 11, y: 0, direction: "E" },
-  ]);
+const generateMockGameState = (): GameState => {
+  const players: Player[] = [
+    {
+      id: "p1",
+      name: "Alice",
+      x: Math.round(Math.random() * 30),
+      y: Math.round(Math.random() * 30),
+      rotation: Math.random() * 360,
+      color: "#ff0000",
+      health: Math.floor(Math.random() * 100),
+      entityType: "PLAYER",
+    },
+    {
+      id: "p2",
+      name: "Bob",
+      x: Math.round(Math.random() * 30),
+      y: Math.round(Math.random() * 30),
+      rotation: Math.random() * 360,
+      color: "#00ff00",
+      health: Math.floor(Math.random() * 100),
+      entityType: "PLAYER",
+    },
+    {
+      id: "p3",
+      name: "Charlie",
+      x: Math.round(Math.random() * 30),
+      y: Math.round(Math.random() * 30),
+      rotation: Math.random() * 360,
+      color: "#0000ff",
+      health: Math.floor(Math.random() * 100),
+      entityType: "PLAYER",
+    },
+  ];
+
+  const projectiles: Projectile[] = Array.from({ length: 5 }, (_, i) => ({
+    id: `proj${i}`,
+    x: Math.random() * 30,
+    y: Math.random() * 30,
+    rotation: Math.random() * 360,
+    entityType: "PROJECTILE",
+  }));
+
+  return {
+    tick: Date.now().toString(),
+    entities: [...players, ...projectiles],
+  };
+};
+
+const calculateTrajectoryEndpoint = (
+  x: number,
+  y: number,
+  rotation: number,
+  length: number,
+) => {
+  const radians = (rotation * Math.PI) / 180;
+  const endX = x + length * Math.cos(radians);
+  const endY = y + length * Math.sin(radians);
+  return { endX, endY };
+};
+
+export default function App() {
+  const [gameState, setGameState] = useState<GameState | null>(null);
+  const [showGrid, setShowGrid] = useState(false);
+  const [showTrajectory, setShowTrajectory] = useState(false);
+  const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    const socket = new WebSocket("ws://localhost:8080");
-    setWs(socket);
+    const mockWebSocket = {
+      onopen: null as (() => void) | null,
+      onmessage: null as ((event: { data: string }) => void) | null,
+      onerror: null as ((error: Event) => void) | null,
+      onclose: null as (() => void) | null,
+      close: () => {},
+    };
 
-    socket.onmessage = (message) => {
-      const parsedMessage = JSON.parse(message.data);
-      if (parsedMessage.type === "gameState") {
-        setPlayers(parsedMessage.data.players);
+    wsRef.current = mockWebSocket as unknown as WebSocket;
+
+    if (mockWebSocket.onopen) {
+      mockWebSocket.onopen();
+    }
+
+    const interval = setInterval(() => {
+      const mockData = generateMockGameState();
+      if (mockWebSocket.onmessage) {
+        mockWebSocket.onmessage({ data: JSON.stringify(mockData) });
       }
-    };
-
-    socket.onclose = () => {
-      console.log("WebSocket connection closed");
-    };
+    }, 5000);
 
     return () => {
-      socket.close();
+      clearInterval(interval);
+      if (mockWebSocket.onclose) {
+        mockWebSocket.onclose();
+      }
     };
   }, []);
 
+  useEffect(() => {
+    if (wsRef.current) {
+      wsRef.current.onopen = () => {
+        console.log("WebSocket connection established");
+      };
+
+      wsRef.current.onmessage = (event) => {
+        const newGameState: GameState = JSON.parse(event.data);
+        setGameState(newGameState);
+      };
+
+      wsRef.current.onerror = (error) => {
+        console.error("WebSocket error:", error);
+      };
+
+      wsRef.current.onclose = () => {
+        console.log("WebSocket connection closed");
+      };
+    }
+  }, []);
+
+  if (!gameState) {
+    return <div>Connecting to game server...</div>;
+  }
+
+  const players = gameState.entities.filter(
+    (entity): entity is Player => entity.entityType === "PLAYER",
+  );
+
   const renderGrid = () => {
-    const grid = [];
-    for (let y = 0; y < GRID_SIZE; y++) {
-      const row = [];
-      for (let x = 0; x < GRID_SIZE; x++) {
-        row.push(
-          <div className="cell" key={`${x}-${y}`}>
-            {players.map(
-              (player) =>
-                player.x === x &&
-                player.y === y && <Player key={player.id} {...player} />,
-            )}
-            {projectiles.map(
-              (projectile, index) =>
-                projectile.x === x &&
-                projectile.y === y && (
-                  <Projectile key={`projectile-${index}`} {...projectile} />
-                ),
-            )}
-          </div>,
-        );
-      }
-      grid.push(
-        <div className="row" key={y}>
-          {row}
-        </div>,
+    if (!showGrid) return null;
+
+    const gridLines = [];
+    for (let i = 2; i < 30; i++) {
+      gridLines.push(
+        <line
+          key={`v${i}`}
+          x1={i * 10 - 5}
+          y1="0"
+          x2={i * 10 - 5}
+          y2="300"
+          stroke="rgba(0,0,0,0.2)"
+          strokeWidth="0.5"
+        />,
+        <line
+          key={`h${i}`}
+          x1="0"
+          y1={i * 10 - 5}
+          x2="300"
+          y2={i * 10 - 5}
+          stroke="rgba(0,0,0,0.2)"
+          strokeWidth="0.5"
+        />,
       );
     }
-    return grid;
+    return gridLines;
   };
 
-  return <div className="game">{renderGrid()}</div>;
-};
+  return (
+    <div className="w-full max-w-6xl mx-auto p-4">
+      <h2 className="text-2xl font-bold mb-4">Game Visualization</h2>
+      <div className="flex flex-col md:flex-row gap-4">
+        <Card className="w-full md:w-1/2">
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-4 mb-4">
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="show-grid"
+                  checked={showGrid}
+                  onCheckedChange={setShowGrid}
+                />
+                <Label htmlFor="show-grid">Show Grid</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="show-trajectory"
+                  checked={showTrajectory}
+                  onCheckedChange={setShowTrajectory}
+                />
+                <Label htmlFor="show-trajectory">
+                  Show Projectile Trajectory
+                </Label>
+              </div>
+            </div>
+            <svg
+              width="100%"
+              height="500"
+              viewBox="0 0 300 300"
+              className="border border-gray-300"
+            >
+              {renderGrid()}
+              <AnimatePresence>
+                {gameState.entities.map((entity) => {
+                  if (entity.entityType === "PLAYER") {
+                    return (
+                      <motion.g
+                        key={entity.id}
+                        initial={{ opacity: 0 }}
+                        animate={{
+                          opacity: 1,
+                          x: entity.x * 10,
+                          y: entity.y * 10,
+                        }}
+                        exit={{ opacity: 0 }}
+                        transition={{ type: "spring", stiffness: 100 }}
+                      >
+                        <line
+                          x1="0"
+                          y1="0"
+                          x2="15"
+                          y2="0"
+                          stroke="black"
+                          strokeWidth="1"
+                          transform={`rotate(${entity.rotation})`}
+                        />
+                        <circle r="5" fill={entity.color} />
+                        <text
+                          y="-10"
+                          textAnchor="middle"
+                          fill="black"
+                          fontSize="8"
+                        >
+                          {entity.name}
+                        </text>
+                      </motion.g>
+                    );
+                  } else {
+                    // Projectile as an arrow
+                    const { endX: nextTurnX, endY: nextTurnY } =
+                      calculateTrajectoryEndpoint(
+                        entity.x,
+                        entity.y,
+                        entity.rotation,
+                        10,
+                      );
 
-export default App;
+                    const { endX, endY } = calculateTrajectoryEndpoint(
+                      nextTurnX,
+                      nextTurnY,
+                      entity.rotation,
+                      100,
+                    );
+
+                    return (
+                      <motion.g key={entity.id}>
+                        {showTrajectory && (
+                          <>
+                            <motion.line
+                              x1={entity.x * 10}
+                              y1={entity.y * 10}
+                              x2={nextTurnX * 10}
+                              y2={nextTurnY * 10}
+                              key={`${entity.id}-next-trajectory`}
+                              stroke="rgba(0,0,0,1)"
+                              strokeWidth="1"
+                              initial={{ pathLength: 0 }}
+                              animate={{ pathLength: 1 }}
+                              transition={{ duration: 0.5 }}
+                            />
+                            <motion.line
+                              x1={entity.x * 10}
+                              y1={entity.y * 10}
+                              x2={endX * 10}
+                              y2={endY * 10}
+                              key={`${entity.id}-trajectory`}
+                              stroke="rgba(0,0,0,0.3)"
+                              strokeWidth="1"
+                              initial={{ pathLength: 0 }}
+                              animate={{ pathLength: 1 }}
+                              transition={{ duration: 0.5 }}
+                            />
+                          </>
+                        )}
+                        <motion.path
+                          d="M-5,-2 L5,0 L-5,2 Z"
+                          fill="black"
+                          initial={{ opacity: 0 }}
+                          animate={{
+                            opacity: 1,
+                            x: entity.x * 10,
+                            y: entity.y * 10,
+                            rotate: entity.rotation,
+                          }}
+                          exit={{ opacity: 0 }}
+                          transition={{ type: "spring", stiffness: 200 }}
+                        />
+                      </motion.g>
+                    );
+                  }
+                })}
+              </AnimatePresence>
+            </svg>
+            <div className="mt-4">
+              <h3 className="text-lg font-semibold">
+                Current Tick:{" "}
+                <code className="bg-gray-800 text-white rounded px-2 ">
+                  {gameState.tick}
+                </code>
+                <Countdown
+                  key={gameState.tick}
+                  date={Date.now() + 5000 - 200}
+                  intervalDelay={200}
+                  precision={3}
+                  renderer={(props) => (
+                    <Progress value={(props.total / (5000 - 200)) * 100} />
+                  )}
+                />
+              </h3>
+            </div>
+          </CardContent>
+        </Card>
+        <div className="w-full md:w-1/2 space-y-4">
+          {players.map((player) => (
+            <Card key={player.id}>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <div
+                    className="w-4 h-4 rounded-full"
+                    style={{ backgroundColor: player.color }}
+                  ></div>
+                  {player.name}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span>Health:</span>
+                    <span>{player.health}%</span>
+                  </div>
+                  <Progress value={player.health} className="w-full" />
+                  <div className="flex justify-between">
+                    <span>Position:</span>
+                    <span>
+                      ({player.x.toFixed(2)}, {player.y.toFixed(2)})
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Rotation:</span>
+                    <span>{player.rotation.toFixed(2)}°</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
