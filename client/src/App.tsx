@@ -159,7 +159,7 @@ export default function App() {
     if (!showGrid) return null;
 
     const gridLines = [];
-    for (let i = 2; i < 30; i++) {
+    for (let i = 1; i < 31; i++) {
       gridLines.push(
         <line
           key={`v${i}`}
@@ -212,7 +212,7 @@ export default function App() {
             </div>
             <svg
               width="100%"
-              height="500"
+              height="100%"
               viewBox="0 0 300 300"
               className="border border-gray-300"
             >
