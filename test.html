@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+  </head>
+  <body>
+    <p></p>
+  </body>
+  <script>
+    const lobbyId = "feaf74c8-732f-4982-b1f6-5c81e3feb605";
+
+    const socket = new WebSocket(
+      `ws://localhost:8080/lobby/${lobbyId}?clientType=PLAYER&username=Test`
+    );
+    console.log(socket);
+
+    socket.onmessage = (message) => {
+      console.log(message.data);
+      console.log(JSON.parse(message.data));
+    };
+  </script>
+</html>
