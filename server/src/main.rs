@@ -1,3 +1,267 @@
-fn main() {
-    println!("Hello, world!");
+use std::collections::HashMap;
+use std::str::FromStr;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+use std::{env, io::Error};
+
+use futures_util::stream::{self, SplitSink, SplitStream};
+use futures_util::{SinkExt, StreamExt};
+use tokio::net::{TcpListener, TcpStream};
+use tokio::sync::Mutex;
+use tokio::time::{self};
+use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::WebSocketStream;
+
+use log::info;
+use querystring;
+use rand::Rng;
+use regex::Regex;
+use uuid::Uuid;
+
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug)]
+enum ClientType {
+    PLAYER,
+    SPECTATOR,
+}
+
+impl FromStr for ClientType {
+    type Err = ();
+
+    fn from_str(input: &str) -> Result<ClientType, Self::Err> {
+        match input {
+            "PLAYER" => Ok(ClientType::PLAYER),
+            "SPECTATOR" => Ok(ClientType::SPECTATOR),
+            _ => Err(()),
+        }
+    }
+}
+#[derive(Serialize, Deserialize)]
+enum EntityType {
+    PLAYER,
+}
+
+#[derive(Serialize, Deserialize)]
+struct Player {
+    entityType: EntityType,
+    id: Uuid,
+    name: String,
+    x: i32,
+    y: i32,
+    rotation: i32,
+    color: String,
+    health: i16,
+    lastActionSuccess: bool,
+    errorMessage: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct GameState {
+    entities: Vec<Player>,
+}
+
+#[derive(Debug)]
+struct Client {
+    clientType: ClientType,
+    username: String,
+    write_stream: SplitSink<WebSocketStream<TcpStream>, Message>,
+    read_stream: SplitStream<WebSocketStream<TcpStream>>,
+}
+
+struct Lobby {
+    id: Uuid,
+    clients: Vec<Client>,
+}
+
+struct Server {
+    lobbies: HashMap<Uuid, Lobby>,
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Error> {
+    let _ = env_logger::try_init();
+    let addr = env::args()
+        .nth(1)
+        .unwrap_or_else(|| "127.0.0.1:8080".to_string());
+
+    // Create the event loop and TCP listener we'll accept connections on.
+    let try_socket = TcpListener::bind(&addr).await;
+    let listener = try_socket.expect("Failed to bind");
+
+    info!("Listening on: {}", addr);
+
+    let mut server = Server {
+        lobbies: HashMap::new(),
+    };
+
+    let lobby_id = Uuid::new_v4();
+
+    let lobby = Lobby {
+        clients: Vec::new(),
+        id: lobby_id,
+    };
+
+    info!("Lobby created with id: {}", lobby.id);
+
+    server.lobbies.insert(lobby.id, lobby);
+
+    let server_arc = Arc::new(Mutex::new(server));
+
+    tokio::spawn(listen_for_connections(listener, server_arc.clone()));
+
+    let interval = time::interval(Duration::from_millis(500));
+
+    let forever = stream::unfold(interval, |mut interval| async {
+        interval.tick().await;
+        send_messages_to_clients(lobby_id, server_arc.clone()).await;
+        Some(((), interval))
+    });
+
+    // let now = Instant::now();
+    forever.for_each(|_| async {}).await;
+
+    loop {}
+}
+
+async fn listen_for_connections(listener: TcpListener, server_mutex: Arc<Mutex<Server>>) {
+    while let Ok((stream, _)) = listener.accept().await {
+        let addr = stream
+            .peer_addr()
+            .expect("connected streams should have a peer address");
+
+        let mut buffer = [0; 2048];
+        stream.peek(&mut buffer).await.expect("Failed to peek");
+        let request_str = std::str::from_utf8(&buffer).unwrap();
+
+        let lines: Vec<String> = request_str.lines().map(|line| line.to_string()).collect();
+        let request_line = lines.first().unwrap().to_string();
+
+        info!("New request: {}", request_line);
+        let request_parts: Vec<&str> = request_line.split(" ").collect();
+
+        let request_url = request_parts.get(1).expect("Could not get URL of request");
+
+        let requestRegex = Regex::new(r"^\/lobby\/(.*)\?(.*)").unwrap();
+
+        let mut results = vec![];
+
+        for (_, [lobby_id, query_string]) in requestRegex
+            .captures_iter(&request_url)
+            .map(|c| c.extract())
+        {
+            results.push(lobby_id);
+            results.push(query_string)
+        }
+
+        info!("regex matches: {:?}", results);
+
+        let lobby_id_str = results
+            .get(0)
+            .expect("Could not get lobby id from request matches");
+        let lobby_uuid = Uuid::parse_str(lobby_id_str).unwrap();
+        let queryParams =
+            querystring::querify(results.get(1).expect("Request is missing query parameters"))
+                .into_iter()
+                .collect::<HashMap<&str, &str>>();
+
+        let client_type_str = queryParams
+            .get("clientType")
+            .expect("Missing client type from supplied query parameters");
+
+        let client_type = ClientType::from_str(&client_type_str).unwrap();
+        let username = queryParams.get("username").unwrap_or(&"");
+
+        info!(
+            "Extract the following info from request. Lobby id: '{}', client type: {}, username: {}",
+            lobby_uuid, client_type_str, username
+        );
+
+        info!("Peer address: {}", addr);
+
+        let ws_stream = tokio_tungstenite::accept_async(stream)
+            .await
+            .expect("Error during the websocket handshake occurred");
+
+        info!("New WebSocket connection: {}", addr);
+
+        let (write, read) = ws_stream.split();
+
+        let mut new_client = Client {
+            clientType: client_type,
+            username: username.to_string(),
+            read_stream: read,
+            write_stream: write,
+        };
+
+        let mut server = server_mutex.lock().await;
+
+        server
+            .lobbies
+            .get_mut(&lobby_uuid)
+            .unwrap()
+            .clients
+            .push(new_client);
+
+        info!(
+            "Added client to lobby. List of clients: {:?}",
+            server.lobbies.get(&lobby_uuid).unwrap().clients
+        );
+
+        let message = Message::text(serde_json::to_string(&get_random_get_state()).unwrap());
+
+        server
+            .lobbies
+            .get_mut(&lobby_uuid)
+            .unwrap()
+            .clients
+            .get_mut(0)
+            .unwrap()
+            .write_stream
+            .send(message)
+            .await
+            .expect("Sending failed");
+    }
+}
+
+async fn send_messages_to_clients(lobby_id: Uuid, server_mutex: Arc<Mutex<Server>>) {
+    let random_game_state = get_random_get_state();
+
+    let mut server = server_mutex.lock().await;
+
+    let send_futures: Vec<_> = server
+        .lobbies
+        .get_mut(&lobby_id)
+        .unwrap()
+        .clients
+        .iter_mut()
+        .map(|client| {
+            client.write_stream.send(Message::text(
+                serde_json::to_string(&random_game_state).unwrap(),
+            ))
+        })
+        .collect();
+
+    for future in send_futures {
+        future.await.expect("Sending failed");
+    }
+}
+
+fn get_random_get_state() -> GameState {
+    let player = Player {
+        entityType: EntityType::PLAYER,
+        color: "#FF0000".to_string(),
+        id: Uuid::new_v4(),
+        name: "Test".to_string(),
+        errorMessage: "".to_string(),
+        health: 100,
+        lastActionSuccess: true,
+        rotation: rand::thread_rng().gen_range(0..360),
+        x: rand::thread_rng().gen_range(0..40),
+        y: rand::thread_rng().gen_range(0..40),
+    };
+
+    return GameState {
+        entities: vec![player],
+    };
 }
