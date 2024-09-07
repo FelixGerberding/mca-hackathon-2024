@@ -1,11 +1,12 @@
 use std::collections::HashMap;
+use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use std::{env, io::Error};
 
 use futures_util::stream::{self, SplitSink, SplitStream};
-use futures_util::{SinkExt, StreamExt};
+use futures_util::{future, pin_mut, SinkExt, StreamExt, TryStreamExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Mutex;
 use tokio::time::{self};
@@ -66,12 +67,12 @@ struct Client {
     clientType: ClientType,
     username: String,
     write_stream: SplitSink<WebSocketStream<TcpStream>, Message>,
-    read_stream: SplitStream<WebSocketStream<TcpStream>>,
+    // read_stream: SplitStream<WebSocketStream<TcpStream>>,
 }
 
 struct Lobby {
     id: Uuid,
-    clients: Vec<Client>,
+    clients: HashMap<SocketAddr, Client>,
 }
 
 struct Server {
@@ -95,10 +96,11 @@ async fn main() -> Result<(), Error> {
         lobbies: HashMap::new(),
     };
 
-    let lobby_id = Uuid::new_v4();
+    // let lobby_id = Uuid::new_v4();
+    let lobby_id = Uuid::parse_str("9ec2a984-b5bf-4a13-89fd-53c0d9cafef6").unwrap();
 
     let lobby = Lobby {
-        clients: Vec::new(),
+        clients: HashMap::new(),
         id: lobby_id,
     };
 
@@ -187,10 +189,10 @@ async fn listen_for_connections(listener: TcpListener, server_mutex: Arc<Mutex<S
 
         let (write, read) = ws_stream.split();
 
-        let mut new_client = Client {
+        let new_client = Client {
             clientType: client_type,
             username: username.to_string(),
-            read_stream: read,
+            // read_stream: read,
             write_stream: write,
         };
 
@@ -201,27 +203,50 @@ async fn listen_for_connections(listener: TcpListener, server_mutex: Arc<Mutex<S
             .get_mut(&lobby_uuid)
             .unwrap()
             .clients
-            .push(new_client);
+            .insert(addr, new_client);
 
         info!(
             "Added client to lobby. List of clients: {:?}",
             server.lobbies.get(&lobby_uuid).unwrap().clients
         );
 
-        let message = Message::text(serde_json::to_string(&get_random_get_state()).unwrap());
-
-        server
-            .lobbies
-            .get_mut(&lobby_uuid)
-            .unwrap()
-            .clients
-            .get_mut(0)
-            .unwrap()
-            .write_stream
-            .send(message)
-            .await
-            .expect("Sending failed");
+        tokio::spawn(listen_for_messages(
+            read,
+            addr,
+            lobby_uuid,
+            server_mutex.clone(),
+        ));
     }
+}
+
+async fn listen_for_messages(
+    readStream: SplitStream<WebSocketStream<TcpStream>>,
+    addr: SocketAddr,
+    lobby_id: Uuid,
+    server_mutex: Arc<Mutex<Server>>,
+) {
+    let broadcast_incoming = readStream.try_for_each(|msg| {
+        println!(
+            "Received a message from {}: {}",
+            addr,
+            msg.to_text().unwrap()
+        );
+
+        future::ok(())
+    });
+
+    pin_mut!(broadcast_incoming);
+    broadcast_incoming.await;
+    println!("{} disconnected", addr);
+
+    let mut server = server_mutex.lock().await;
+
+    server
+        .lobbies
+        .get_mut(&lobby_id)
+        .unwrap()
+        .clients
+        .remove(&addr);
 }
 
 async fn send_messages_to_clients(lobby_id: Uuid, server_mutex: Arc<Mutex<Server>>) {
@@ -235,7 +260,7 @@ async fn send_messages_to_clients(lobby_id: Uuid, server_mutex: Arc<Mutex<Server
         .unwrap()
         .clients
         .iter_mut()
-        .map(|client| {
+        .map(|(_, client)| {
             client.write_stream.send(Message::text(
                 serde_json::to_string(&random_game_state).unwrap(),
             ))
