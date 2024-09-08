@@ -24,6 +24,7 @@ use uuid::Uuid;
 use warp::Filter;
 
 mod api_models;
+mod management_api;
 mod models;
 
 #[tokio::main]
@@ -81,42 +82,13 @@ async fn main() -> Result<(), Error> {
     let ping_clients = forever.for_each(|_| async {});
     pin_mut!(ping_clients);
 
-    // GET /hello/warp => 200 OK with body "Hello, warp!"
-    let getLobbies = warp::path!("lobbies")
-        .and(warp::get())
-        .and(with_server(server_arc.clone()))
-        .and_then(returnLobbies);
-
-    let rest_api = warp::serve(getLobbies).run(([127, 0, 0, 1], 8081));
+    let rest_api =
+        warp::serve(management_api::management_api(server_arc.clone())).run(([127, 0, 0, 1], 8081));
     pin_mut!(rest_api);
 
     future::select(ping_clients, rest_api).await;
 
     loop {}
-}
-
-fn with_server(
-    server_arc: models::ServerArc,
-) -> impl Filter<Extract = (models::ServerArc,), Error = std::convert::Infallible> + Clone {
-    warp::any().map(move || server_arc.clone())
-}
-
-async fn returnLobbies(server_arc: models::ServerArc) -> Result<impl warp::Reply, Infallible> {
-    let server = server_arc.lock().await;
-
-    let server_out = api_models::ServerOut {
-        lobbies: server
-            .lobbies
-            .values()
-            .cloned()
-            .map(|lobby| api_models::LobbyOut {
-                id: lobby.id,
-                clients: lobby.clients.values().cloned().collect(),
-            })
-            .collect(),
-    };
-
-    Ok(warp::reply::json(&server_out))
 }
 
 async fn listen_for_connections(
