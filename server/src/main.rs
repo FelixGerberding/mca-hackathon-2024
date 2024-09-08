@@ -1,4 +1,7 @@
+use std::borrow::BorrowMut;
 use std::collections::HashMap;
+use std::convert::Infallible;
+use std::hash::Hash;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -6,10 +9,12 @@ use std::time::Duration;
 use std::{env, io::Error};
 
 use futures_util::stream::{self, SplitSink, SplitStream};
-use futures_util::{future, pin_mut, SinkExt, StreamExt, TryStreamExt};
+use futures_util::{future, pin_mut, FutureExt, SinkExt, StreamExt, TryStreamExt};
+use serde_json::{Map, Value};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Mutex;
 use tokio::time::{self};
+use tokio_tungstenite::tungstenite::handshake::server;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::WebSocketStream;
 
@@ -19,9 +24,11 @@ use rand::Rng;
 use regex::Regex;
 use uuid::Uuid;
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 
-#[derive(Debug)]
+use warp::Filter;
+
+#[derive(Debug, Serialize, Clone)]
 enum ClientType {
     PLAYER,
     SPECTATOR,
@@ -62,22 +69,46 @@ struct GameState {
     entities: Vec<Player>,
 }
 
-#[derive(Debug)]
+struct Connection {
+    write_stream: SplitSink<WebSocketStream<TcpStream>, Message>,
+}
+
+#[derive(Debug, Serialize, Clone)]
 struct Client {
     clientType: ClientType,
     username: String,
-    write_stream: SplitSink<WebSocketStream<TcpStream>, Message>,
-    // read_stream: SplitStream<WebSocketStream<TcpStream>>,
+    #[serde(skip)]
+    addr: SocketAddr,
 }
 
+#[derive(Clone)]
 struct Lobby {
     id: Uuid,
     clients: HashMap<SocketAddr, Client>,
 }
 
+#[derive(Serialize)]
+struct LobbyOut {
+    id: Uuid,
+    clients: Vec<Client>,
+}
+
 struct Server {
     lobbies: HashMap<Uuid, Lobby>,
 }
+
+type ServerArc = Arc<Mutex<Server>>;
+
+#[derive(Serialize)]
+struct ServerOut {
+    lobbies: Vec<LobbyOut>,
+}
+
+struct Db {
+    connections: HashMap<SocketAddr, Connection>,
+}
+
+type DbArc = Arc<Mutex<Db>>;
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -110,23 +141,69 @@ async fn main() -> Result<(), Error> {
 
     let server_arc = Arc::new(Mutex::new(server));
 
-    tokio::spawn(listen_for_connections(listener, server_arc.clone()));
+    let db = Db {
+        connections: HashMap::new(),
+    };
+
+    let db_arc = Arc::new(Mutex::new(db));
+
+    tokio::spawn(listen_for_connections(
+        listener,
+        db_arc.clone(),
+        server_arc.clone(),
+    ));
 
     let interval = time::interval(Duration::from_millis(500));
 
     let forever = stream::unfold(interval, |mut interval| async {
         interval.tick().await;
-        send_messages_to_clients(lobby_id, server_arc.clone()).await;
+        send_messages_to_clients(lobby_id, db_arc.clone(), server_arc.clone()).await;
         Some(((), interval))
     });
 
     // let now = Instant::now();
-    forever.for_each(|_| async {}).await;
+    let ping_clients = forever.for_each(|_| async {});
+    pin_mut!(ping_clients);
+
+    // GET /hello/warp => 200 OK with body "Hello, warp!"
+    let getLobbies = warp::path!("lobbies")
+        .and(warp::get())
+        .and(with_server(server_arc.clone()))
+        .and_then(returnLobbies);
+
+    let rest_api = warp::serve(getLobbies).run(([127, 0, 0, 1], 8081));
+    pin_mut!(rest_api);
+
+    future::select(ping_clients, rest_api).await;
 
     loop {}
 }
 
-async fn listen_for_connections(listener: TcpListener, server_mutex: Arc<Mutex<Server>>) {
+fn with_server(
+    server_arc: ServerArc,
+) -> impl Filter<Extract = (ServerArc,), Error = std::convert::Infallible> + Clone {
+    warp::any().map(move || server_arc.clone())
+}
+
+async fn returnLobbies(server_arc: ServerArc) -> Result<impl warp::Reply, Infallible> {
+    let server = server_arc.lock().await;
+
+    let server_out = ServerOut {
+        lobbies: server
+            .lobbies
+            .values()
+            .cloned()
+            .map(|lobby| LobbyOut {
+                id: lobby.id,
+                clients: lobby.clients.values().cloned().collect(),
+            })
+            .collect(),
+    };
+
+    Ok(warp::reply::json(&server_out))
+}
+
+async fn listen_for_connections(listener: TcpListener, db_arc: DbArc, server_arc: ServerArc) {
     while let Ok((stream, _)) = listener.accept().await {
         let addr = stream
             .peer_addr()
@@ -192,11 +269,15 @@ async fn listen_for_connections(listener: TcpListener, server_mutex: Arc<Mutex<S
         let new_client = Client {
             clientType: client_type,
             username: username.to_string(),
-            // read_stream: read,
+            addr: addr,
+        };
+
+        let new_connection = Connection {
             write_stream: write,
         };
 
-        let mut server = server_mutex.lock().await;
+        let mut db = db_arc.lock().await;
+        let mut server = server_arc.lock().await;
 
         server
             .lobbies
@@ -204,6 +285,8 @@ async fn listen_for_connections(listener: TcpListener, server_mutex: Arc<Mutex<S
             .unwrap()
             .clients
             .insert(addr, new_client);
+
+        db.connections.insert(addr, new_connection);
 
         info!(
             "Added client to lobby. List of clients: {:?}",
@@ -214,7 +297,8 @@ async fn listen_for_connections(listener: TcpListener, server_mutex: Arc<Mutex<S
             read,
             addr,
             lobby_uuid,
-            server_mutex.clone(),
+            db_arc.clone(),
+            server_arc.clone(),
         ));
     }
 }
@@ -223,7 +307,8 @@ async fn listen_for_messages(
     readStream: SplitStream<WebSocketStream<TcpStream>>,
     addr: SocketAddr,
     lobby_id: Uuid,
-    server_mutex: Arc<Mutex<Server>>,
+    db_arc: DbArc,
+    server_arc: ServerArc,
 ) {
     let broadcast_incoming = readStream.try_for_each(|msg| {
         println!(
@@ -237,39 +322,66 @@ async fn listen_for_messages(
 
     pin_mut!(broadcast_incoming);
     broadcast_incoming.await;
+
     println!("{} disconnected", addr);
 
-    let mut server = server_mutex.lock().await;
-
+    let mut server = server_arc.lock().await;
     server
         .lobbies
         .get_mut(&lobby_id)
         .unwrap()
         .clients
         .remove(&addr);
+
+    let mut db = db_arc.lock().await;
+    db.connections.remove(&addr);
 }
 
-async fn send_messages_to_clients(lobby_id: Uuid, server_mutex: Arc<Mutex<Server>>) {
+async fn send_messages_to_clients(lobby_id: Uuid, db_arc: DbArc, server_arc: ServerArc) {
     let random_game_state = get_random_get_state();
 
-    let mut server = server_mutex.lock().await;
+    let mut server = server_arc.lock().await;
 
-    let send_futures: Vec<_> = server
+    let addresses: Vec<SocketAddr> = server
         .lobbies
         .get_mut(&lobby_id)
         .unwrap()
         .clients
-        .iter_mut()
-        .map(|(_, client)| {
-            client.write_stream.send(Message::text(
-                serde_json::to_string(&random_game_state).unwrap(),
-            ))
+        .values()
+        .map(|client| client.addr)
+        .collect();
+
+    info!("Sending messages to: {:?}", addresses);
+
+    let send_futures: Vec<_> = addresses
+        .iter()
+        .map(|addr| {
+            send_message(
+                &addr,
+                Message::text(serde_json::to_string(&random_game_state).unwrap()),
+                db_arc.clone(),
+            )
         })
         .collect();
 
     for future in send_futures {
-        future.await.expect("Sending failed");
+        future.await;
     }
+}
+
+async fn send_message(addr: &SocketAddr, message: Message, db_arc: DbArc) {
+    let mut db = db_arc.lock().await;
+
+    db.connections
+        .get_mut(addr)
+        .expect(&format!(
+            "No connection found for client with address '{}'",
+            addr
+        ))
+        .write_stream
+        .send(message)
+        .await
+        .expect("Sending failed");
 }
 
 fn get_random_get_state() -> GameState {

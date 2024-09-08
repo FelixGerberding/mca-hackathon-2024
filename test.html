@@ -21,5 +21,9 @@
       console.log(message.data);
       console.log(JSON.parse(message.data));
     };
+
+    socket.onopen = () => {
+      console.log("CONNECTED");
+    };
   </script>
 </html>
