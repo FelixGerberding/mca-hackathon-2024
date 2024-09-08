@@ -1,20 +1,17 @@
-use std::borrow::BorrowMut;
 use std::collections::HashMap;
 use std::convert::Infallible;
-use std::hash::Hash;
 use std::net::SocketAddr;
+
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use std::{env, io::Error};
 
-use futures_util::stream::{self, SplitSink, SplitStream};
-use futures_util::{future, pin_mut, FutureExt, SinkExt, StreamExt, TryStreamExt};
-use serde_json::{Map, Value};
+use futures_util::stream::{self, SplitStream};
+use futures_util::{future, pin_mut, SinkExt, StreamExt, TryStreamExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Mutex;
 use tokio::time::{self};
-use tokio_tungstenite::tungstenite::handshake::server;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::WebSocketStream;
 
@@ -22,93 +19,12 @@ use log::info;
 use querystring;
 use rand::Rng;
 use regex::Regex;
+
 use uuid::Uuid;
-
-use serde::{Deserialize, Serialize, Serializer};
-
 use warp::Filter;
 
-#[derive(Debug, Serialize, Clone)]
-enum ClientType {
-    PLAYER,
-    SPECTATOR,
-}
-
-impl FromStr for ClientType {
-    type Err = ();
-
-    fn from_str(input: &str) -> Result<ClientType, Self::Err> {
-        match input {
-            "PLAYER" => Ok(ClientType::PLAYER),
-            "SPECTATOR" => Ok(ClientType::SPECTATOR),
-            _ => Err(()),
-        }
-    }
-}
-#[derive(Serialize, Deserialize)]
-enum EntityType {
-    PLAYER,
-}
-
-#[derive(Serialize, Deserialize)]
-struct Player {
-    entityType: EntityType,
-    id: Uuid,
-    name: String,
-    x: i32,
-    y: i32,
-    rotation: i32,
-    color: String,
-    health: i16,
-    lastActionSuccess: bool,
-    errorMessage: String,
-}
-
-#[derive(Serialize, Deserialize)]
-struct GameState {
-    entities: Vec<Player>,
-}
-
-struct Connection {
-    write_stream: SplitSink<WebSocketStream<TcpStream>, Message>,
-}
-
-#[derive(Debug, Serialize, Clone)]
-struct Client {
-    clientType: ClientType,
-    username: String,
-    #[serde(skip)]
-    addr: SocketAddr,
-}
-
-#[derive(Clone)]
-struct Lobby {
-    id: Uuid,
-    clients: HashMap<SocketAddr, Client>,
-}
-
-#[derive(Serialize)]
-struct LobbyOut {
-    id: Uuid,
-    clients: Vec<Client>,
-}
-
-struct Server {
-    lobbies: HashMap<Uuid, Lobby>,
-}
-
-type ServerArc = Arc<Mutex<Server>>;
-
-#[derive(Serialize)]
-struct ServerOut {
-    lobbies: Vec<LobbyOut>,
-}
-
-struct Db {
-    connections: HashMap<SocketAddr, Connection>,
-}
-
-type DbArc = Arc<Mutex<Db>>;
+mod api_models;
+mod models;
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -123,14 +39,14 @@ async fn main() -> Result<(), Error> {
 
     info!("Listening on: {}", addr);
 
-    let mut server = Server {
+    let mut server = models::Server {
         lobbies: HashMap::new(),
     };
 
     // let lobby_id = Uuid::new_v4();
     let lobby_id = Uuid::parse_str("9ec2a984-b5bf-4a13-89fd-53c0d9cafef6").unwrap();
 
-    let lobby = Lobby {
+    let lobby = models::Lobby {
         clients: HashMap::new(),
         id: lobby_id,
     };
@@ -141,7 +57,7 @@ async fn main() -> Result<(), Error> {
 
     let server_arc = Arc::new(Mutex::new(server));
 
-    let db = Db {
+    let db = models::Db {
         connections: HashMap::new(),
     };
 
@@ -180,20 +96,20 @@ async fn main() -> Result<(), Error> {
 }
 
 fn with_server(
-    server_arc: ServerArc,
-) -> impl Filter<Extract = (ServerArc,), Error = std::convert::Infallible> + Clone {
+    server_arc: models::ServerArc,
+) -> impl Filter<Extract = (models::ServerArc,), Error = std::convert::Infallible> + Clone {
     warp::any().map(move || server_arc.clone())
 }
 
-async fn returnLobbies(server_arc: ServerArc) -> Result<impl warp::Reply, Infallible> {
+async fn returnLobbies(server_arc: models::ServerArc) -> Result<impl warp::Reply, Infallible> {
     let server = server_arc.lock().await;
 
-    let server_out = ServerOut {
+    let server_out = api_models::ServerOut {
         lobbies: server
             .lobbies
             .values()
             .cloned()
-            .map(|lobby| LobbyOut {
+            .map(|lobby| api_models::LobbyOut {
                 id: lobby.id,
                 clients: lobby.clients.values().cloned().collect(),
             })
@@ -203,7 +119,11 @@ async fn returnLobbies(server_arc: ServerArc) -> Result<impl warp::Reply, Infall
     Ok(warp::reply::json(&server_out))
 }
 
-async fn listen_for_connections(listener: TcpListener, db_arc: DbArc, server_arc: ServerArc) {
+async fn listen_for_connections(
+    listener: TcpListener,
+    db_arc: models::DbArc,
+    server_arc: models::ServerArc,
+) {
     while let Ok((stream, _)) = listener.accept().await {
         let addr = stream
             .peer_addr()
@@ -248,7 +168,7 @@ async fn listen_for_connections(listener: TcpListener, db_arc: DbArc, server_arc
             .get("clientType")
             .expect("Missing client type from supplied query parameters");
 
-        let client_type = ClientType::from_str(&client_type_str).unwrap();
+        let client_type = models::ClientType::from_str(&client_type_str).unwrap();
         let username = queryParams.get("username").unwrap_or(&"");
 
         info!(
@@ -266,13 +186,13 @@ async fn listen_for_connections(listener: TcpListener, db_arc: DbArc, server_arc
 
         let (write, read) = ws_stream.split();
 
-        let new_client = Client {
+        let new_client = models::Client {
             clientType: client_type,
             username: username.to_string(),
             addr: addr,
         };
 
-        let new_connection = Connection {
+        let new_connection = models::Connection {
             write_stream: write,
         };
 
@@ -307,8 +227,8 @@ async fn listen_for_messages(
     readStream: SplitStream<WebSocketStream<TcpStream>>,
     addr: SocketAddr,
     lobby_id: Uuid,
-    db_arc: DbArc,
-    server_arc: ServerArc,
+    db_arc: models::DbArc,
+    server_arc: models::ServerArc,
 ) {
     let broadcast_incoming = readStream.try_for_each(|msg| {
         println!(
@@ -337,7 +257,11 @@ async fn listen_for_messages(
     db.connections.remove(&addr);
 }
 
-async fn send_messages_to_clients(lobby_id: Uuid, db_arc: DbArc, server_arc: ServerArc) {
+async fn send_messages_to_clients(
+    lobby_id: Uuid,
+    db_arc: models::DbArc,
+    server_arc: models::ServerArc,
+) {
     let random_game_state = get_random_get_state();
 
     let mut server = server_arc.lock().await;
@@ -369,7 +293,7 @@ async fn send_messages_to_clients(lobby_id: Uuid, db_arc: DbArc, server_arc: Ser
     }
 }
 
-async fn send_message(addr: &SocketAddr, message: Message, db_arc: DbArc) {
+async fn send_message(addr: &SocketAddr, message: Message, db_arc: models::DbArc) {
     let mut db = db_arc.lock().await;
 
     db.connections
@@ -384,9 +308,9 @@ async fn send_message(addr: &SocketAddr, message: Message, db_arc: DbArc) {
         .expect("Sending failed");
 }
 
-fn get_random_get_state() -> GameState {
-    let player = Player {
-        entityType: EntityType::PLAYER,
+fn get_random_get_state() -> models::GameState {
+    let player = models::Player {
+        entityType: models::EntityType::PLAYER,
         color: "#FF0000".to_string(),
         id: Uuid::new_v4(),
         name: "Test".to_string(),
@@ -398,7 +322,7 @@ fn get_random_get_state() -> GameState {
         y: rand::thread_rng().gen_range(0..40),
     };
 
-    return GameState {
+    return models::GameState {
         entities: vec![player],
     };
 }
