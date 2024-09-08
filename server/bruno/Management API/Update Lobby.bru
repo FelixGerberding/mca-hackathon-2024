@@ -1,0 +1,17 @@
+meta {
+  name: Update Lobby
+  type: http
+  seq: 4
+}
+
+patch {
+  url: http://localhost:8081/lobbies/{{lobby_id}}
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "status": "RUNNING"
+  }
+}

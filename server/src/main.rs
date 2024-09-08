@@ -50,6 +50,7 @@ async fn main() -> Result<(), Error> {
     let lobby = models::Lobby {
         clients: HashMap::new(),
         id: lobby_id,
+        status: models::LobbyStatus::PENDING,
     };
 
     info!("Lobby created with id: {}", lobby.id);

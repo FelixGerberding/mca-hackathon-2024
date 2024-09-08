@@ -1,4 +1,5 @@
 use uuid::Uuid;
+use warp::http::StatusCode;
 
 use std::collections::HashMap;
 use std::convert::Infallible;
@@ -17,7 +18,9 @@ fn with_server(
 pub fn management_api(
     server_arc: models::ServerArc,
 ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
-    list_lobbies(server_arc.clone()).or(create_lobby(server_arc.clone()))
+    list_lobbies(server_arc.clone())
+        .or(create_lobby(server_arc.clone()))
+        .or(update_lobby(server_arc.clone()))
 }
 
 fn list_lobbies(
@@ -38,6 +41,32 @@ fn create_lobby(
         .and_then(get_create_lobby_reply)
 }
 
+fn update_lobby(
+    server_arc: models::ServerArc,
+) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
+    warp::path!("lobbies" / Uuid)
+        .and(warp::patch())
+        .and(with_server(server_arc.clone()))
+        .and(warp::body::json())
+        .and_then(get_update_lobby_reply)
+}
+
+async fn get_update_lobby_reply(
+    lobby_id: Uuid,
+    server_arc: models::ServerArc,
+    update_lobby_body: api_models::UpdateLobbyBody,
+) -> Result<impl warp::Reply, Infallible> {
+    let mut server = server_arc.lock().await;
+
+    server
+        .lobbies
+        .get_mut(&lobby_id)
+        .expect(&format!("Lobby with id {} does not exist", lobby_id))
+        .status = update_lobby_body.status;
+
+    Ok(warp::reply::with_status("", StatusCode::OK))
+}
+
 async fn get_create_lobby_reply(
     server_arc: models::ServerArc,
 ) -> Result<impl warp::Reply, Infallible> {
@@ -48,6 +77,7 @@ async fn get_create_lobby_reply(
     let new_lobby = models::Lobby {
         id: lobby_id,
         clients: HashMap::new(),
+        status: models::LobbyStatus::PENDING,
     };
 
     server.lobbies.insert(lobby_id, new_lobby);
@@ -68,6 +98,7 @@ async fn get_lobbies_list_reply(
             .values()
             .cloned()
             .map(|lobby| api_models::LobbyOut {
+                status: lobby.status,
                 id: lobby.id,
                 clients: lobby.clients.values().cloned().collect(),
             })

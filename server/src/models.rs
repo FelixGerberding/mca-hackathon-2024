@@ -17,6 +17,13 @@ pub enum ClientType {
     SPECTATOR,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub enum LobbyStatus {
+    PENDING,
+    RUNNING,
+    FINISHED,
+}
+
 impl FromStr for ClientType {
     type Err = ();
 
@@ -65,6 +72,7 @@ pub struct Client {
 pub struct Lobby {
     pub id: Uuid,
     pub clients: HashMap<SocketAddr, Client>,
+    pub status: LobbyStatus,
 }
 
 pub struct Server {
