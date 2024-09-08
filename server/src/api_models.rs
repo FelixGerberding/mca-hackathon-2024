@@ -13,3 +13,8 @@ pub struct LobbyOut {
     pub id: Uuid,
     pub clients: Vec<Client>,
 }
+
+#[derive(Serialize)]
+pub struct LobbyCreateResponse {
+    pub id: Uuid,
+}

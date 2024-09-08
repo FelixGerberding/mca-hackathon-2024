@@ -240,11 +240,8 @@ async fn send_messages_to_clients(
 
     let addresses: Vec<SocketAddr> = server
         .lobbies
-        .get_mut(&lobby_id)
-        .unwrap()
-        .clients
-        .values()
-        .map(|client| client.addr)
+        .values_mut()
+        .flat_map(|lobby| lobby.clients.values().map(|client| client.addr))
         .collect();
 
     info!("Sending messages to: {:?}", addresses);
