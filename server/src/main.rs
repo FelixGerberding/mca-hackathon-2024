@@ -1,5 +1,5 @@
+use std::borrow::Cow;
 use std::collections::HashMap;
-use std::convert::Infallible;
 use std::net::SocketAddr;
 
 use std::str::FromStr;
@@ -12,6 +12,8 @@ use futures_util::{future, pin_mut, SinkExt, StreamExt, TryStreamExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Mutex;
 use tokio::time::{self};
+use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
+use tokio_tungstenite::tungstenite::protocol::CloseFrame;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::WebSocketStream;
 
@@ -21,7 +23,6 @@ use rand::Rng;
 use regex::Regex;
 
 use uuid::Uuid;
-use warp::Filter;
 
 mod api_models;
 mod management_api;
@@ -165,34 +166,59 @@ async fn listen_for_connections(
             addr: addr,
         };
 
-        let new_connection = models::Connection {
+        let mut new_connection = models::Connection {
             write_stream: write,
         };
 
-        let mut db = db_arc.lock().await;
         let mut server = server_arc.lock().await;
 
-        server
-            .lobbies
-            .get_mut(&lobby_uuid)
-            .unwrap()
-            .clients
-            .insert(addr, new_client);
-
-        db.connections.insert(addr, new_connection);
-
         info!(
-            "Added client to lobby. List of clients: {:?}",
-            server.lobbies.get(&lobby_uuid).unwrap().clients
+            "Lobby is currently in state: '{:?}'",
+            server.lobbies.get(&lobby_uuid).unwrap().status
         );
 
-        tokio::spawn(listen_for_messages(
-            read,
-            addr,
-            lobby_uuid,
-            db_arc.clone(),
-            server_arc.clone(),
-        ));
+        if matches!(
+            server.lobbies.get(&lobby_uuid).unwrap().status,
+            models::LobbyStatus::PENDING
+        ) {
+            server
+                .lobbies
+                .get_mut(&lobby_uuid)
+                .unwrap()
+                .clients
+                .insert(addr, new_client);
+
+            let mut db = db_arc.lock().await;
+
+            db.connections.insert(addr, new_connection);
+
+            info!(
+                "Added client to lobby. List of clients: {:?}",
+                server.lobbies.get(&lobby_uuid).unwrap().clients
+            );
+
+            tokio::spawn(listen_for_messages(
+                read,
+                addr,
+                lobby_uuid,
+                db_arc.clone(),
+                server_arc.clone(),
+            ));
+        } else {
+            let error_reason = format!(
+                "Lobby with id '{}' is not open for new connections",
+                lobby_id_str
+            );
+
+            new_connection
+                .write_stream
+                .send(Message::Close(Some(CloseFrame {
+                    code: CloseCode::Normal,
+                    reason: Cow::Owned(error_reason),
+                })))
+                .await
+                .expect("Closing connection failed");
+        }
     }
 }
 

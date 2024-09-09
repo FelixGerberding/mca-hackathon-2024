@@ -22,8 +22,12 @@
       console.log(JSON.parse(message.data));
     };
 
-    socket.onopen = () => {
-      console.log("CONNECTED");
+    socket.onopen = (event) => {
+      console.log("CONNECTED", event);
+    };
+
+    socket.onclose = (event) => {
+      console.log("CLOSED", event);
     };
   </script>
 </html>
