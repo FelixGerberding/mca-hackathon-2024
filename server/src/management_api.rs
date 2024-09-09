@@ -58,13 +58,19 @@ async fn get_update_lobby_reply(
 ) -> Result<impl warp::Reply, Infallible> {
     let mut server = server_arc.lock().await;
 
-    server
-        .lobbies
-        .get_mut(&lobby_id)
-        .expect(&format!("Lobby with id {} does not exist", lobby_id))
-        .status = update_lobby_body.status;
+    match server.lobbies.get_mut(&lobby_id) {
+        Some(lobby) => {
+            lobby.status = update_lobby_body.status;
+        }
+        None => {
+            return Ok(warp::reply::with_status(
+                format!("Lobby with id '{}' does not exist", lobby_id),
+                StatusCode::NOT_FOUND,
+            ))
+        }
+    }
 
-    Ok(warp::reply::with_status("", StatusCode::OK))
+    Ok(warp::reply::with_status("".to_string(), StatusCode::OK))
 }
 
 async fn get_create_lobby_reply(
