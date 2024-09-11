@@ -29,7 +29,7 @@ pub async fn listen_for_messages(
     });
 
     pin_mut!(broadcast_incoming);
-    broadcast_incoming.await;
+    let _ = broadcast_incoming.await;
 
     println!("{} disconnected", addr);
 
