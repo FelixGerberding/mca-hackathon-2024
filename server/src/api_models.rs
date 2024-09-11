@@ -24,3 +24,9 @@ pub struct LobbyCreateResponse {
 pub struct UpdateLobbyBody {
     pub status: models::LobbyStatus,
 }
+
+#[derive(Serialize)]
+pub struct GameStateOut {
+    pub players: Vec<models::Player>,
+    pub entities: Vec<models::Projectile>,
+}
