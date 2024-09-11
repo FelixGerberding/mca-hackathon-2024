@@ -5,6 +5,7 @@ use warp::http::StatusCode;
 use std::collections::HashMap;
 use std::convert::Infallible;
 
+use warp::cors::Cors;
 use warp::Filter;
 
 use crate::api_models;
@@ -27,9 +28,14 @@ pub fn management_api(
     server_arc: models::ServerArc,
     db_arc: models::DbArc,
 ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
+    let cors = warp::cors()
+        .allow_any_origin()
+        .allow_methods(vec!["GET", "POST", "PATCH"])
+        .allow_headers(vec!["Content-Type", "Authorization"]);
     list_lobbies(server_arc.clone())
         .or(create_lobby(server_arc.clone()))
         .or(update_lobby(server_arc.clone(), db_arc.clone()))
+        .with(cors)
 }
 
 fn list_lobbies(
