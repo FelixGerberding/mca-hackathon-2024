@@ -7,6 +7,7 @@ use std::convert::Infallible;
 use warp::Filter;
 
 use crate::api_models;
+use crate::game;
 use crate::models;
 
 fn with_server(
@@ -15,12 +16,19 @@ fn with_server(
     warp::any().map(move || server_arc.clone())
 }
 
+fn with_db(
+    db_arc: models::DbArc,
+) -> impl Filter<Extract = (models::DbArc,), Error = std::convert::Infallible> + Clone {
+    warp::any().map(move || db_arc.clone())
+}
+
 pub fn management_api(
     server_arc: models::ServerArc,
+    db_arc: models::DbArc,
 ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
     list_lobbies(server_arc.clone())
         .or(create_lobby(server_arc.clone()))
-        .or(update_lobby(server_arc.clone()))
+        .or(update_lobby(server_arc.clone(), db_arc.clone()))
 }
 
 fn list_lobbies(
@@ -43,10 +51,12 @@ fn create_lobby(
 
 fn update_lobby(
     server_arc: models::ServerArc,
+    db_arc: models::DbArc,
 ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
     warp::path!("lobbies" / Uuid)
         .and(warp::patch())
         .and(with_server(server_arc.clone()))
+        .and(with_db(db_arc.clone()))
         .and(warp::body::json())
         .and_then(get_update_lobby_reply)
 }
@@ -54,13 +64,30 @@ fn update_lobby(
 async fn get_update_lobby_reply(
     lobby_id: Uuid,
     server_arc: models::ServerArc,
+    db_arc: models::DbArc,
     update_lobby_body: api_models::UpdateLobbyBody,
 ) -> Result<impl warp::Reply, Infallible> {
     let mut server = server_arc.lock().await;
 
     match server.lobbies.get_mut(&lobby_id) {
         Some(lobby) => {
-            lobby.status = update_lobby_body.status;
+            if matches!(lobby.status, models::LobbyStatus::RUNNING) {
+                return Ok(warp::reply::with_status(
+                    "Lobby status cannot be updated while lobby is running".to_string(),
+                    StatusCode::UNPROCESSABLE_ENTITY,
+                ));
+            }
+
+            if matches!(update_lobby_body.status, models::LobbyStatus::RUNNING) {
+                tokio::spawn(game::start_game_for_lobby(
+                    lobby_id,
+                    server_arc.clone(),
+                    db_arc.clone(),
+                ));
+            }
+
+            lobby.status = update_lobby_body.status.clone();
+            return Ok(warp::reply::with_status("".to_string(), StatusCode::OK));
         }
         None => {
             return Ok(warp::reply::with_status(
@@ -69,8 +96,6 @@ async fn get_update_lobby_reply(
             ))
         }
     }
-
-    Ok(warp::reply::with_status("".to_string(), StatusCode::OK))
 }
 
 async fn get_create_lobby_reply(
@@ -84,6 +109,7 @@ async fn get_create_lobby_reply(
         id: lobby_id,
         clients: HashMap::new(),
         status: models::LobbyStatus::PENDING,
+        game_state: None,
     };
 
     server.lobbies.insert(lobby_id, new_lobby);

@@ -1,30 +1,26 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
-use std::net::SocketAddr;
 
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::Duration;
 use std::{env, io::Error};
 
-use futures_util::stream::{self, SplitStream};
-use futures_util::{future, pin_mut, SinkExt, StreamExt, TryStreamExt};
-use tokio::net::{TcpListener, TcpStream};
+use futures_util::{pin_mut, SinkExt, StreamExt};
+use tokio::net::TcpListener;
 use tokio::sync::Mutex;
-use tokio::time::{self};
 use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
 use tokio_tungstenite::tungstenite::protocol::CloseFrame;
 use tokio_tungstenite::tungstenite::Message;
-use tokio_tungstenite::WebSocketStream;
 
 use log::info;
 use querystring;
-use rand::Rng;
 use regex::Regex;
 
 use uuid::Uuid;
 
 mod api_models;
+mod client_handling;
+mod game;
 mod management_api;
 mod models;
 
@@ -52,6 +48,7 @@ async fn main() -> Result<(), Error> {
         clients: HashMap::new(),
         id: lobby_id,
         status: models::LobbyStatus::PENDING,
+        game_state: None,
     };
 
     info!("Lobby created with id: {}", lobby.id);
@@ -72,25 +69,15 @@ async fn main() -> Result<(), Error> {
         server_arc.clone(),
     ));
 
-    let interval = time::interval(Duration::from_millis(500));
-
-    let forever = stream::unfold(interval, |mut interval| async {
-        interval.tick().await;
-        send_messages_to_clients(lobby_id, db_arc.clone(), server_arc.clone()).await;
-        Some(((), interval))
-    });
-
-    // let now = Instant::now();
-    let ping_clients = forever.for_each(|_| async {});
-    pin_mut!(ping_clients);
-
-    let rest_api =
-        warp::serve(management_api::management_api(server_arc.clone())).run(([127, 0, 0, 1], 8081));
+    let rest_api = warp::serve(management_api::management_api(
+        server_arc.clone(),
+        db_arc.clone(),
+    ))
+    .run(([127, 0, 0, 1], 8081));
     pin_mut!(rest_api);
 
-    future::select(ping_clients, rest_api).await;
-
-    loop {}
+    rest_api.await;
+    Ok(())
 }
 
 async fn listen_for_connections(
@@ -161,7 +148,7 @@ async fn listen_for_connections(
         let (write, read) = ws_stream.split();
 
         let new_client = models::Client {
-            clientType: client_type,
+            client_type: client_type,
             username: username.to_string(),
             addr: addr,
         };
@@ -197,7 +184,7 @@ async fn listen_for_connections(
                 server.lobbies.get(&lobby_uuid).unwrap().clients
             );
 
-            tokio::spawn(listen_for_messages(
+            tokio::spawn(client_handling::listen_for_messages(
                 read,
                 addr,
                 lobby_uuid,
@@ -220,105 +207,4 @@ async fn listen_for_connections(
                 .expect("Closing connection failed");
         }
     }
-}
-
-async fn listen_for_messages(
-    readStream: SplitStream<WebSocketStream<TcpStream>>,
-    addr: SocketAddr,
-    lobby_id: Uuid,
-    db_arc: models::DbArc,
-    server_arc: models::ServerArc,
-) {
-    let broadcast_incoming = readStream.try_for_each(|msg| {
-        println!(
-            "Received a message from {}: {}",
-            addr,
-            msg.to_text().unwrap()
-        );
-
-        future::ok(())
-    });
-
-    pin_mut!(broadcast_incoming);
-    broadcast_incoming.await;
-
-    println!("{} disconnected", addr);
-
-    let mut server = server_arc.lock().await;
-    server
-        .lobbies
-        .get_mut(&lobby_id)
-        .unwrap()
-        .clients
-        .remove(&addr);
-
-    let mut db = db_arc.lock().await;
-    db.connections.remove(&addr);
-}
-
-async fn send_messages_to_clients(
-    lobby_id: Uuid,
-    db_arc: models::DbArc,
-    server_arc: models::ServerArc,
-) {
-    let random_game_state = get_random_get_state();
-
-    let mut server = server_arc.lock().await;
-
-    let addresses: Vec<SocketAddr> = server
-        .lobbies
-        .values_mut()
-        .flat_map(|lobby| lobby.clients.values().map(|client| client.addr))
-        .collect();
-
-    info!("Sending messages to: {:?}", addresses);
-
-    let send_futures: Vec<_> = addresses
-        .iter()
-        .map(|addr| {
-            send_message(
-                &addr,
-                Message::text(serde_json::to_string(&random_game_state).unwrap()),
-                db_arc.clone(),
-            )
-        })
-        .collect();
-
-    for future in send_futures {
-        future.await;
-    }
-}
-
-async fn send_message(addr: &SocketAddr, message: Message, db_arc: models::DbArc) {
-    let mut db = db_arc.lock().await;
-
-    db.connections
-        .get_mut(addr)
-        .expect(&format!(
-            "No connection found for client with address '{}'",
-            addr
-        ))
-        .write_stream
-        .send(message)
-        .await
-        .expect("Sending failed");
-}
-
-fn get_random_get_state() -> models::GameState {
-    let player = models::Player {
-        entityType: models::EntityType::PLAYER,
-        color: "#FF0000".to_string(),
-        id: Uuid::new_v4(),
-        name: "Test".to_string(),
-        errorMessage: "".to_string(),
-        health: 100,
-        lastActionSuccess: true,
-        rotation: rand::thread_rng().gen_range(0..360),
-        x: rand::thread_rng().gen_range(0..40),
-        y: rand::thread_rng().gen_range(0..40),
-    };
-
-    return models::GameState {
-        entities: vec![player],
-    };
 }

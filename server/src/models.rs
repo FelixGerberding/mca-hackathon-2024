@@ -36,14 +36,17 @@ impl FromStr for ClientType {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Clone)]
 pub enum EntityType {
     PLAYER,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Clone)]
+pub struct Projectile {}
+
+#[derive(Serialize, Clone)]
 pub struct Player {
-    pub entityType: EntityType,
+    pub entity_type: EntityType,
     pub id: Uuid,
     pub name: String,
     pub x: i32,
@@ -51,18 +54,19 @@ pub struct Player {
     pub rotation: i32,
     pub color: String,
     pub health: i16,
-    pub lastActionSuccess: bool,
-    pub errorMessage: String,
+    pub last_action_success: bool,
+    pub error_message: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Clone)]
 pub struct GameState {
-    pub entities: Vec<Player>,
+    pub players: HashMap<SocketAddr, Player>,
+    pub entities: Vec<Projectile>,
 }
 
 #[derive(Debug, Serialize, Clone)]
 pub struct Client {
-    pub clientType: ClientType,
+    pub client_type: ClientType,
     pub username: String,
     #[serde(skip)]
     pub addr: SocketAddr,
@@ -73,6 +77,7 @@ pub struct Lobby {
     pub id: Uuid,
     pub clients: HashMap<SocketAddr, Client>,
     pub status: LobbyStatus,
+    pub game_state: Option<GameState>,
 }
 
 pub struct Server {

@@ -1,0 +1,17 @@
+meta {
+  name: Open Lobby
+  type: http
+  seq: 5
+}
+
+patch {
+  url: http://localhost:8081/lobbies/{{lobby_id}}
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "status": "PENDING"
+  }
+}
