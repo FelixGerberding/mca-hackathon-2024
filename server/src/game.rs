@@ -87,7 +87,7 @@ async fn ping_clients_in_lobby(
 ) {
     let mut server = server_arc.lock().await;
 
-    let mut lobby = server.lobbies.get_mut(&lobby_id).unwrap();
+    let lobby = server.lobbies.get_mut(&lobby_id).unwrap();
 
     let socket_addresses: Vec<SocketAddr> = lobby.clients.keys().cloned().collect();
 

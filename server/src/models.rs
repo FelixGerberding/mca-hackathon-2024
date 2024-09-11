@@ -68,8 +68,6 @@ pub struct GameState {
 pub struct Client {
     pub client_type: ClientType,
     pub username: String,
-    #[serde(skip)]
-    pub addr: SocketAddr,
 }
 
 #[derive(Clone)]

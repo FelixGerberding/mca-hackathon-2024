@@ -102,11 +102,11 @@ async fn listen_for_connections(
 
         let request_url = request_parts.get(1).expect("Could not get URL of request");
 
-        let requestRegex = Regex::new(r"^\/lobby\/(.*)\?(.*)").unwrap();
+        let request_regex = Regex::new(r"^\/lobby\/(.*)\?(.*)").unwrap();
 
         let mut results = vec![];
 
-        for (_, [lobby_id, query_string]) in requestRegex
+        for (_, [lobby_id, query_string]) in request_regex
             .captures_iter(&request_url)
             .map(|c| c.extract())
         {
@@ -120,17 +120,17 @@ async fn listen_for_connections(
             .get(0)
             .expect("Could not get lobby id from request matches");
         let lobby_uuid = Uuid::parse_str(lobby_id_str).unwrap();
-        let queryParams =
+        let query_params =
             querystring::querify(results.get(1).expect("Request is missing query parameters"))
                 .into_iter()
                 .collect::<HashMap<&str, &str>>();
 
-        let client_type_str = queryParams
+        let client_type_str = query_params
             .get("clientType")
             .expect("Missing client type from supplied query parameters");
 
         let client_type = models::ClientType::from_str(&client_type_str).unwrap();
-        let username = queryParams.get("username").unwrap_or(&"");
+        let username = query_params.get("username").unwrap_or(&"");
 
         info!(
             "Extract the following info from request. Lobby id: '{}', client type: {}, username: {}",
@@ -150,7 +150,6 @@ async fn listen_for_connections(
         let new_client = models::Client {
             client_type: client_type,
             username: username.to_string(),
-            addr: addr,
         };
 
         let mut new_connection = models::Connection {
