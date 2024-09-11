@@ -32,8 +32,7 @@ type GameState = {
   entities: Projectile[];
 };
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const generateMockGameState = (): GameState => {
+/*const generateMockGameState = (): GameState => {
   const players: Player[] = [
     {
       id: "p1",
@@ -80,7 +79,7 @@ const generateMockGameState = (): GameState => {
     entities: projectiles,
     players: players,
   };
-};
+};*/
 
 const calculateTrajectoryEndpoint = (
   x: number,
@@ -145,7 +144,7 @@ export default function Game() {
         const newGameState: GameState = JSON.parse(event.data);
 
         setGameState({
-          tick: "123",
+          tick: Date.now().toString(),
           players: newGameState.players,
           entities: newGameState.entities,
         });
