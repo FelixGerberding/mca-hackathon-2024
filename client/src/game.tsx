@@ -5,6 +5,7 @@ import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import Countdown from "react-countdown";
+import { useParams } from "react-router-dom";
 
 type Player = {
   id: string;
@@ -14,7 +15,7 @@ type Player = {
   rotation: number;
   color: string;
   health: number;
-  entityType: "PLAYER";
+  entity_type: "PLAYER";
 };
 
 type Projectile = {
@@ -22,14 +23,16 @@ type Projectile = {
   x: number;
   y: number;
   rotation: number;
-  entityType: "PROJECTILE";
+  entity_type: "PROJECTILE";
 };
 
 type GameState = {
   tick: string;
-  entities: (Player | Projectile)[];
+  players: Player[];
+  entities: Projectile[];
 };
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const generateMockGameState = (): GameState => {
   const players: Player[] = [
     {
@@ -40,7 +43,7 @@ const generateMockGameState = (): GameState => {
       rotation: Math.random() * 360,
       color: "#ff0000",
       health: Math.floor(Math.random() * 100),
-      entityType: "PLAYER",
+      entity_type: "PLAYER",
     },
     {
       id: "p2",
@@ -50,7 +53,7 @@ const generateMockGameState = (): GameState => {
       rotation: Math.random() * 360,
       color: "#00ff00",
       health: Math.floor(Math.random() * 100),
-      entityType: "PLAYER",
+      entity_type: "PLAYER",
     },
     {
       id: "p3",
@@ -60,7 +63,7 @@ const generateMockGameState = (): GameState => {
       rotation: Math.random() * 360,
       color: "#0000ff",
       health: Math.floor(Math.random() * 100),
-      entityType: "PLAYER",
+      entity_type: "PLAYER",
     },
   ];
 
@@ -69,12 +72,13 @@ const generateMockGameState = (): GameState => {
     x: Math.random() * 30,
     y: Math.random() * 30,
     rotation: Math.random() * 360,
-    entityType: "PROJECTILE",
+    entity_type: "PROJECTILE",
   }));
 
   return {
     tick: Date.now().toString(),
-    entities: [...players, ...projectiles],
+    entities: projectiles,
+    players: players,
   };
 };
 
@@ -90,14 +94,15 @@ const calculateTrajectoryEndpoint = (
   return { endX, endY };
 };
 
-export default function App() {
+export default function Game() {
+  const { lobbyId } = useParams();
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [showGrid, setShowGrid] = useState(false);
   const [showTrajectory, setShowTrajectory] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    const mockWebSocket = {
+    /*const mockWebSocket = {
       onopen: null as (() => void) | null,
       onmessage: null as ((event: { data: string }) => void) | null,
       onerror: null as ((error: Event) => void) | null,
@@ -123,8 +128,12 @@ export default function App() {
       if (mockWebSocket.onclose) {
         mockWebSocket.onclose();
       }
-    };
-  }, []);
+    };*/
+
+    wsRef.current = new WebSocket(
+      `ws://localhost:8080/lobby/${lobbyId}?clientType=SPECTATOR&username=Test`,
+    );
+  }, [lobbyId]);
 
   useEffect(() => {
     if (wsRef.current) {
@@ -134,7 +143,12 @@ export default function App() {
 
       wsRef.current.onmessage = (event) => {
         const newGameState: GameState = JSON.parse(event.data);
-        setGameState(newGameState);
+
+        setGameState({
+          tick: "123",
+          players: newGameState.players,
+          entities: newGameState.entities,
+        });
       };
 
       wsRef.current.onerror = (error) => {
@@ -151,9 +165,7 @@ export default function App() {
     return <div>Connecting to game server...</div>;
   }
 
-  const players = gameState.entities.filter(
-    (entity): entity is Player => entity.entityType === "PLAYER",
-  );
+  const players = gameState.players;
 
   const renderGrid = () => {
     if (!showGrid) return null;
@@ -218,104 +230,105 @@ export default function App() {
             >
               {renderGrid()}
               <AnimatePresence>
+                {gameState.players.map((entity) => {
+                  return (
+                    <motion.g
+                      key={entity.id}
+                      initial={{ opacity: 0 }}
+                      animate={{
+                        opacity: 1,
+                        x: entity.x * 10,
+                        y: entity.y * 10,
+                      }}
+                      exit={{ opacity: 0 }}
+                      transition={{ type: "spring", stiffness: 100 }}
+                    >
+                      <line
+                        x1="0"
+                        y1="0"
+                        x2="15"
+                        y2="0"
+                        stroke="black"
+                        strokeWidth="1"
+                        transform={`rotate(${entity.rotation})`}
+                      />
+                      <circle r="5" fill={entity.color} />
+                      <text
+                        y="-10"
+                        textAnchor="middle"
+                        fill="black"
+                        fontSize="8"
+                      >
+                        {entity.name}
+                      </text>
+                    </motion.g>
+                  );
+                })}
+                ;
                 {gameState.entities.map((entity) => {
-                  if (entity.entityType === "PLAYER") {
-                    return (
-                      <motion.g
-                        key={entity.id}
+                  // Projectile as an arrow
+                  const { endX: nextTurnX, endY: nextTurnY } =
+                    calculateTrajectoryEndpoint(
+                      entity.x,
+                      entity.y,
+                      entity.rotation,
+                      10,
+                    );
+
+                  const { endX, endY } = calculateTrajectoryEndpoint(
+                    nextTurnX,
+                    nextTurnY,
+                    entity.rotation,
+                    100,
+                  );
+
+                  return (
+                    <motion.g key={entity.id}>
+                      {showTrajectory && (
+                        <>
+                          <motion.line
+                            x1={entity.x * 10}
+                            y1={entity.y * 10}
+                            x2={nextTurnX * 10}
+                            y2={nextTurnY * 10}
+                            key={`${entity.id}-next-trajectory`}
+                            stroke="rgba(0,0,0,1)"
+                            strokeWidth="1"
+                            initial={{ pathLength: 0 }}
+                            animate={{ pathLength: 1 }}
+                            transition={{ duration: 0.5 }}
+                          />
+                          <motion.line
+                            x1={entity.x * 10}
+                            y1={entity.y * 10}
+                            x2={endX * 10}
+                            y2={endY * 10}
+                            key={`${entity.id}-trajectory`}
+                            stroke="rgba(0,0,0,0.3)"
+                            strokeWidth="1"
+                            initial={{ pathLength: 0 }}
+                            animate={{ pathLength: 1 }}
+                            transition={{ duration: 0.5 }}
+                          />
+                        </>
+                      )}
+                      <motion.path
+                        d="M-5,-2 L5,0 L-5,2 Z"
+                        fill="black"
                         initial={{ opacity: 0 }}
                         animate={{
                           opacity: 1,
                           x: entity.x * 10,
                           y: entity.y * 10,
+                          rotate: entity.rotation,
                         }}
                         exit={{ opacity: 0 }}
-                        transition={{ type: "spring", stiffness: 100 }}
-                      >
-                        <line
-                          x1="0"
-                          y1="0"
-                          x2="15"
-                          y2="0"
-                          stroke="black"
-                          strokeWidth="1"
-                          transform={`rotate(${entity.rotation})`}
-                        />
-                        <circle r="5" fill={entity.color} />
-                        <text
-                          y="-10"
-                          textAnchor="middle"
-                          fill="black"
-                          fontSize="8"
-                        >
-                          {entity.name}
-                        </text>
-                      </motion.g>
-                    );
-                  } else {
-                    // Projectile as an arrow
-                    const { endX: nextTurnX, endY: nextTurnY } =
-                      calculateTrajectoryEndpoint(
-                        entity.x,
-                        entity.y,
-                        entity.rotation,
-                        10,
-                      );
-
-                    const { endX, endY } = calculateTrajectoryEndpoint(
-                      nextTurnX,
-                      nextTurnY,
-                      entity.rotation,
-                      100,
-                    );
-
-                    return (
-                      <motion.g key={entity.id}>
-                        {showTrajectory && (
-                          <>
-                            <motion.line
-                              x1={entity.x * 10}
-                              y1={entity.y * 10}
-                              x2={nextTurnX * 10}
-                              y2={nextTurnY * 10}
-                              key={`${entity.id}-next-trajectory`}
-                              stroke="rgba(0,0,0,1)"
-                              strokeWidth="1"
-                              initial={{ pathLength: 0 }}
-                              animate={{ pathLength: 1 }}
-                              transition={{ duration: 0.5 }}
-                            />
-                            <motion.line
-                              x1={entity.x * 10}
-                              y1={entity.y * 10}
-                              x2={endX * 10}
-                              y2={endY * 10}
-                              key={`${entity.id}-trajectory`}
-                              stroke="rgba(0,0,0,0.3)"
-                              strokeWidth="1"
-                              initial={{ pathLength: 0 }}
-                              animate={{ pathLength: 1 }}
-                              transition={{ duration: 0.5 }}
-                            />
-                          </>
-                        )}
-                        <motion.path
-                          d="M-5,-2 L5,0 L-5,2 Z"
-                          fill="black"
-                          initial={{ opacity: 0 }}
-                          animate={{
-                            opacity: 1,
-                            x: entity.x * 10,
-                            y: entity.y * 10,
-                            rotate: entity.rotation,
-                          }}
-                          exit={{ opacity: 0 }}
-                          transition={{ type: "spring", stiffness: 200 }}
-                        />
-                      </motion.g>
-                    );
-                  }
+                        transition={{ type: "spring", stiffness: 200 }}
+                      />
+                    </motion.g>
+                  );
                 })}
+                ;
               </AnimatePresence>
             </svg>
             <div className="mt-4">
@@ -326,7 +339,7 @@ export default function App() {
                 </code>
                 <Countdown
                   key={gameState.tick}
-                  date={Date.now() + 5000 - 200}
+                  date={Date.now() + 2000 - 200}
                   intervalDelay={200}
                   precision={3}
                   renderer={(props) => (
