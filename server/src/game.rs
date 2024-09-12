@@ -91,7 +91,6 @@ async fn ping_clients_in_lobby(
 
     let socket_addresses: Vec<SocketAddr> = lobby.clients.keys().cloned().collect();
 
-    lobby.game_state = get_updated_game_state(lobby.game_state.clone().unwrap());
     let game_state = lobby.game_state.clone().unwrap();
     let game_state_out = api_models::GameStateOut {
         entities: game_state.entities,
@@ -109,17 +108,29 @@ async fn ping_clients_in_lobby(
     }
 }
 
-fn get_updated_game_state(mut game_state: GameState) -> Option<GameState> {
-    game_state
-        .players
-        .values_mut()
-        .for_each(|player| player.x += 1);
-
-    return Some(game_state);
-}
-
 fn transform_map_of_players_to_list_of_player(
     map_of_player: HashMap<SocketAddr, Player>,
 ) -> Vec<Player> {
     return map_of_player.values().cloned().collect();
+}
+
+pub fn update_state_of_player(
+    client_message: api_models::ClientMessage,
+    player: &mut models::Player,
+) {
+    match client_message.action {
+        api_models::ClientAction::TURN => {}
+        api_models::ClientAction::UP => {
+            player.y += 1;
+        }
+        api_models::ClientAction::DOWN => {
+            player.y -= 1;
+        }
+        api_models::ClientAction::RIGHT => {
+            player.x += 1;
+        }
+        api_models::ClientAction::LEFT => {
+            player.x -= 1;
+        }
+    }
 }

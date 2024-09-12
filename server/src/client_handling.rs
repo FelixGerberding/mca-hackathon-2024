@@ -8,6 +8,7 @@ use tokio_tungstenite::WebSocketStream;
 use uuid::Uuid;
 
 use crate::models;
+use crate::{api_models, game};
 
 use log::info;
 
@@ -24,6 +25,13 @@ pub async fn listen_for_messages(
             addr,
             msg.to_text().unwrap()
         );
+
+        tokio::spawn(process_message_of_client(
+            lobby_id,
+            addr,
+            server_arc.clone(),
+            msg,
+        ));
 
         future::ok(())
     });
@@ -43,6 +51,43 @@ pub async fn listen_for_messages(
 
     let mut db = db_arc.lock().await;
     db.connections.remove(&addr);
+}
+
+async fn process_message_of_client(
+    lobby_id: Uuid,
+    addr: SocketAddr,
+    server_arc: models::ServerArc,
+    message: Message,
+) {
+    let mut server = server_arc.lock().await;
+
+    if !matches!(
+        server.lobbies.get(&lobby_id).unwrap().status,
+        models::LobbyStatus::RUNNING
+    ) {
+        info!(
+            "Skipping message of client with address '{}'. Lobby is not running at the moment.",
+            addr
+        );
+        return;
+    }
+
+    let client_message: api_models::ClientMessage = serde_json::from_str(&message.to_string())
+        .expect(&format!("Cannot parse message of client {}", addr));
+
+    game::update_state_of_player(
+        client_message,
+        server
+            .lobbies
+            .get_mut(&lobby_id)
+            .unwrap()
+            .game_state
+            .as_mut()
+            .unwrap()
+            .players
+            .get_mut(&addr)
+            .unwrap(),
+    );
 }
 
 pub async fn send_message_to_addr(addr: &SocketAddr, message: Message, db_arc: models::DbArc) {

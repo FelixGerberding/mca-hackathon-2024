@@ -4,7 +4,6 @@ use warp::http::StatusCode;
 use std::collections::HashMap;
 use std::convert::Infallible;
 
-use warp::cors::Cors;
 use warp::Filter;
 
 use crate::api_models;
