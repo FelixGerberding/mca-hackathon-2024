@@ -34,21 +34,24 @@ fn get_initial_game_state(lobby: &mut models::Lobby) -> Option<GameState> {
         .clients
         .iter()
         .zip(0i32..)
-        .map(|((addr, client), index)| {
-            let player = models::Player {
-                entity_type: models::EntityType::PLAYER,
-                id: Uuid::new_v4(),
-                name: client.username.clone(),
-                x: index,
-                y: index,
-                rotation: 100,
-                color: "#FF00FF".to_string(),
-                health: 100,
-                last_action_success: true,
-                error_message: "".to_string(),
-            };
+        .filter_map(|((addr, client), index)| match client.client_type {
+            models::ClientType::PLAYER => {
+                let player = models::Player {
+                    entity_type: models::EntityType::PLAYER,
+                    id: Uuid::new_v4(),
+                    name: client.username.clone(),
+                    x: index,
+                    y: index,
+                    rotation: 100,
+                    color: "#FF00FF".to_string(),
+                    health: 100,
+                    last_action_success: true,
+                    error_message: "".to_string(),
+                };
 
-            return (addr.clone(), player);
+                return Some((addr.clone(), player));
+            }
+            _ => None,
         })
         .collect();
 
