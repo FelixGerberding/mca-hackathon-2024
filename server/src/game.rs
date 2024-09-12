@@ -66,14 +66,14 @@ fn get_initial_game_state(lobby: &mut models::Lobby) -> Option<GameState> {
 async fn run_game_for_lobby(lobby_id: Uuid, server_arc: models::ServerArc, db_arc: models::DbArc) {
     info!("Starting game for lobby with id '{}'", lobby_id);
 
-    for _i in 0..5 {
-        time::sleep(Duration::from_secs(2)).await;
+    for _i in 0..20 {
         let _ = tokio::spawn(ping_clients_in_lobby(
             lobby_id.clone(),
             server_arc.clone(),
             db_arc.clone(),
         ))
         .await;
+        time::sleep(Duration::from_secs(2)).await;
     }
 
     let mut server = server_arc.lock().await;
