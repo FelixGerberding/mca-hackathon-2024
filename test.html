@@ -17,9 +17,25 @@
     );
     console.log(socket);
 
+    let i = 0;
+
+    messageBodies = [
+      { action: "RIGHT" },
+      { action: "RIGHT" },
+      { action: "DOWN" },
+      { action: "DOWN" },
+      { action: "LEFT" },
+      { action: "LEFT" },
+      { action: "UP" },
+      { action: "UP" },
+    ];
+
     socket.onmessage = (message) => {
       console.log(message.data);
       console.log(JSON.parse(message.data));
+
+      socket.send(JSON.stringify(messageBodies[i % 8]));
+      i++;
     };
 
     socket.onopen = (event) => {
