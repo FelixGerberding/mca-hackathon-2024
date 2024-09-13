@@ -1,3 +1,7 @@
+[profile.dev]
+opt-level = 1           # Use slightly better optimizations.
+overflow-checks = false # Disable integer overflow checks.
+
 [package]
 name = "mca-hackathon-server"
 version = "0.1.0"
