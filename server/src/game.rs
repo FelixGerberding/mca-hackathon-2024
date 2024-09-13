@@ -11,6 +11,9 @@ use crate::models;
 use crate::models::GameState;
 use crate::models::Player;
 
+const MAX_FIELD_SIZE_X: i32 = 30;
+const MAX_FIELD_SIZE_Y: i32 = 30;
+
 pub async fn start_game_for_lobby(
     lobby_id: Uuid,
     server_arc: models::ServerArc,
@@ -64,7 +67,7 @@ fn get_initial_game_state(lobby: &mut models::Lobby) -> Option<GameState> {
 }
 
 async fn run_game_for_lobby(lobby_id: Uuid, server_arc: models::ServerArc, db_arc: models::DbArc) {
-    info!("Starting game for lobby with id '{}'", lobby_id);
+    info!("Starting game for lobby with id '{}'.", lobby_id);
 
     for _i in 0..20 {
         let _ = tokio::spawn(ping_clients_in_lobby(
@@ -121,19 +124,64 @@ pub fn update_state_of_player(
     client_message: api_models::ClientMessage,
     player: &mut models::Player,
 ) {
+    player.error_message = "".to_string();
+    player.last_action_success = true;
+
     match client_message.action {
-        api_models::ClientAction::TURN => {}
+        api_models::ClientAction::TURN => {
+            if client_message.degrees.is_none() {
+                player.error_message =
+                    "Cannot TURN, because no 'degrees' property was supplied".to_string();
+                player.last_action_success = false;
+                return;
+            }
+
+            let degrees = client_message.degrees.unwrap();
+
+            if !(degrees >= 0 && degrees <= 360) {
+                player.error_message =
+                    "Cannot TURN, because 'degrees' is not within range (0 - 360)".to_string();
+                player.last_action_success = false;
+                return;
+            }
+
+            player.rotation = degrees;
+        }
         api_models::ClientAction::UP => {
-            player.y += 1;
+            if player.y < MAX_FIELD_SIZE_Y {
+                player.y += 1;
+            } else {
+                player.error_message =
+                    "Cannot move UP, because player is at border of field".to_string();
+                player.last_action_success = false;
+            }
         }
         api_models::ClientAction::DOWN => {
-            player.y -= 1;
+            if player.y > 0 {
+                player.y -= 1;
+            } else {
+                player.error_message =
+                    "Cannot move DOWN, because player is at border of field".to_string();
+                player.last_action_success = false;
+            }
         }
         api_models::ClientAction::RIGHT => {
-            player.x += 1;
+            if player.x < MAX_FIELD_SIZE_X {
+                player.x += 1;
+            } else {
+                player.error_message =
+                    "Cannot move RIGHT, because player is at border of field".to_string();
+                player.last_action_success = false;
+            }
         }
         api_models::ClientAction::LEFT => {
-            player.x -= 1;
+            if player.x > 0 {
+                player.x -= 1;
+            } else {
+                player.error_message =
+                    "Cannot move LEFT, because player is at border of field".to_string();
+                player.last_action_success = false;
+            }
         }
     }
 }
