@@ -35,6 +35,7 @@ pub struct GameStateOut {
 
 #[derive(Deserialize, Clone)]
 pub enum ClientAction {
+    SHOOT,
     TURN,
     UP,
     DOWN,

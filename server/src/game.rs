@@ -1,6 +1,7 @@
 use log::info;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::f64::consts::PI;
 use std::net::SocketAddr;
 use std::time::Duration;
 use tokio::task::JoinHandle;
@@ -16,6 +17,7 @@ use crate::models::Player;
 const MAX_FIELD_SIZE_X: i32 = 30;
 const MAX_FIELD_SIZE_Y: i32 = 30;
 const MAX_ROUNDS: i32 = 10;
+const PROJECTILE_UNIT_LENGTH_TRAVEL: f64 = 6.0;
 
 pub async fn start_game_for_lobby(
     lobby_id: Uuid,
@@ -100,21 +102,16 @@ async fn ping_clients_in_lobby(
         return;
     }
 
+    let game_state = lobby.game_state.as_mut().unwrap();
+
     lobby
         .client_messages
         .iter()
         .for_each(|(addr, client_message)| {
-            update_state_of_player(
-                client_message.clone(),
-                lobby
-                    .game_state
-                    .as_mut()
-                    .unwrap()
-                    .players
-                    .get_mut(addr)
-                    .unwrap(),
-            );
+            handle_client_message(client_message.clone(), addr, game_state);
         });
+
+    calculate_projectile_updates(game_state);
 
     lobby.tick = Uuid::new_v4();
     lobby.round += 1;
@@ -201,11 +198,28 @@ fn transform_map_of_players_to_list_of_player(
     return map_of_player.values().cloned().collect();
 }
 
-fn update_state_of_player(client_message: api_models::ClientMessage, player: &mut models::Player) {
+fn handle_client_message(
+    client_message: api_models::ClientMessage,
+    addr: &SocketAddr,
+    game_state: &mut models::GameState,
+) {
+    let player = game_state.players.get_mut(addr).unwrap();
+
     player.error_message = "".to_string();
     player.last_action_success = true;
 
     match client_message.action {
+        api_models::ClientAction::SHOOT => {
+            let new_projectile = models::Projectile {
+                id: Uuid::new_v4(),
+                x: player.x.into(),
+                y: player.y.into(),
+                direction: player.rotation,
+                source: addr.clone(),
+            };
+
+            game_state.entities.push(new_projectile);
+        }
         api_models::ClientAction::TURN => {
             if client_message.degrees.is_none() {
                 player.error_message =
@@ -319,4 +333,51 @@ pub async fn check_all_clients_responded(
             db_arc.clone(),
         ));
     }
+}
+
+fn calculate_projectile_updates(game_state: &mut models::GameState) {
+    game_state.entities.iter_mut().for_each(|projectile| {
+        let list_of_hit_coordinates = get_fields_passed_by_projectile(projectile);
+
+        game_state.players.iter_mut().for_each(|(addr, player)| {
+            if list_of_hit_coordinates.contains(&(player.x, player.y))
+                && projectile.source != addr.clone()
+            {
+                player.health -= 20;
+                return;
+            }
+        });
+
+        let ending_coordinates =
+            get_ending_coordinates_of_projectile(projectile.x, projectile.y, projectile.direction);
+
+        projectile.x = ending_coordinates.0;
+        projectile.y = ending_coordinates.1;
+    })
+}
+
+fn get_fields_passed_by_projectile(projectile: &models::Projectile) -> Vec<(i32, i32)> {
+    let start_point: line_drawing::Point<f64> = (projectile.x, projectile.y);
+
+    let end_point: line_drawing::Point<f64> =
+        get_ending_coordinates_of_projectile(projectile.x, projectile.y, projectile.direction);
+    return line_drawing::Midpoint::new(start_point, end_point).collect();
+}
+
+fn get_ending_coordinates_of_projectile(start_x: f64, start_y: f64, direction: i32) -> (f64, f64) {
+    let directional_vector = get_directional_vector_from_degrees(direction);
+
+    let end_x = start_x + PROJECTILE_UNIT_LENGTH_TRAVEL * directional_vector.0;
+    let end_y = start_y + PROJECTILE_UNIT_LENGTH_TRAVEL * directional_vector.1;
+
+    return (end_x, end_y);
+}
+
+fn get_directional_vector_from_degrees(degrees: i32) -> (f64, f64) {
+    let degrees_f64: f64 = degrees.into();
+    let divisor: f64 = 180.into();
+
+    let radians = (degrees_f64 * PI) / divisor;
+
+    return (f64::cos(radians), f64::sin(radians));
 }

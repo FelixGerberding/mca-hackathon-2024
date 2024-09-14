@@ -47,7 +47,14 @@ pub enum EntityType {
 }
 
 #[derive(Serialize, Clone)]
-pub struct Projectile {}
+pub struct Projectile {
+    pub id: Uuid,
+    pub x: f64,
+    pub y: f64,
+    pub direction: i32,
+    #[serde(skip)]
+    pub source: SocketAddr,
+}
 
 #[derive(Serialize, Clone)]
 pub struct Player {
