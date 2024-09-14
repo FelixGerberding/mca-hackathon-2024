@@ -111,6 +111,7 @@ async fn get_create_lobby_reply(
     let lobby_id = Uuid::new_v4();
 
     let new_lobby = models::Lobby {
+        round: 0,
         tick: Uuid::new_v4(),
         tick_length_milli_seconds: models::TICK_LENGTH_MILLI_SECONDS,
         client_messages: HashMap::new(),

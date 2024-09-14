@@ -28,20 +28,28 @@
       { action: "TURN", degrees: 270 },
       { action: "LEFT" },
       { action: "LEFT" },
-      { action: "UP" },
-      { action: "UP" },
+      { action: "RIGHT" },
+      { action: "RIGHT" },
     ];
 
-    socket.onmessage = (incomingMessage) => {
+    let lastMessageReceivedTime = 0;
+
+    socket.onmessage = async (incomingMessage) => {
       console.log(incomingMessage.data);
       let incoming = JSON.parse(incomingMessage.data);
-      console.log(incoming);
+      console.log("RECEIVED", incoming);
+      console.log(
+        "Time since last message:",
+        Date.now() - lastMessageReceivedTime,
+        "ms"
+      );
+      lastMessageReceivedTime = Date.now();
 
-      const message = { ...messageBodies[i % 8] };
+      const message = { ...messageBodies[i % messageBodies.length] };
       message.tick = incoming.tick;
 
+      await new Promise((resolve) => setTimeout(resolve, 20));
       console.log("SENDING", message);
-
       socket.send(JSON.stringify(message));
       i++;
     };

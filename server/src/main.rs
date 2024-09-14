@@ -45,6 +45,7 @@ async fn main() -> Result<(), Error> {
     let lobby_id = Uuid::parse_str("9ec2a984-b5bf-4a13-89fd-53c0d9cafef6").unwrap();
 
     let lobby = models::Lobby {
+        round: 0,
         tick: Uuid::new_v4(),
         tick_length_milli_seconds: models::TICK_LENGTH_MILLI_SECONDS,
         client_messages: HashMap::new(),
@@ -61,6 +62,7 @@ async fn main() -> Result<(), Error> {
     let server_arc = Arc::new(Mutex::new(server));
 
     let db = models::Db {
+        open_tick_handles: HashMap::new(),
         connections: HashMap::new(),
     };
 

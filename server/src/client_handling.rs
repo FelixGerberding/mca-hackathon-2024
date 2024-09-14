@@ -9,7 +9,7 @@ use tokio_tungstenite::WebSocketStream;
 use uuid::Uuid;
 
 use crate::api_models::ClientMessage;
-use crate::models;
+use crate::{game, models};
 
 use log::info;
 
@@ -21,7 +21,7 @@ pub async fn listen_for_messages(
     server_arc: models::ServerArc,
 ) {
     let broadcast_incoming = read_stream.try_for_each(|msg| {
-        println!(
+        info!(
             "Received a message from {}: {}",
             addr,
             msg.to_text().unwrap()
@@ -31,6 +31,7 @@ pub async fn listen_for_messages(
             lobby_id,
             addr,
             server_arc.clone(),
+            db_arc.clone(),
             msg,
         ));
 
@@ -58,6 +59,7 @@ async fn process_message_of_client(
     lobby_id: Uuid,
     addr: SocketAddr,
     server_arc: models::ServerArc,
+    db_arc: models::DbArc,
     message: Message,
 ) {
     let mut server = server_arc.lock().await;
@@ -133,6 +135,12 @@ async fn process_message_of_client(
                 .unwrap()
                 .client_messages
                 .insert(addr, client_message);
+
+            tokio::spawn(game::check_all_clients_responded(
+                lobby_id,
+                server_arc.clone(),
+                db_arc.clone(),
+            ));
         }
     }
 }

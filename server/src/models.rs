@@ -5,6 +5,7 @@ use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use tokio::task::JoinHandle;
 use tokio_tungstenite::WebSocketStream;
 use uuid::Uuid;
 
@@ -76,6 +77,7 @@ pub struct Client {
 
 #[derive(Clone)]
 pub struct Lobby {
+    pub round: i32,
     pub tick: Uuid,
     pub tick_length_milli_seconds: i32,
     pub id: Uuid,
@@ -97,6 +99,7 @@ pub struct Connection {
 
 pub struct Db {
     pub connections: HashMap<SocketAddr, Connection>,
+    pub open_tick_handles: HashMap<Uuid, JoinHandle<()>>,
 }
 
 pub type DbArc = Arc<Mutex<Db>>;
