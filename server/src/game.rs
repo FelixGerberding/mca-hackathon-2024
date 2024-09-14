@@ -74,14 +74,12 @@ async fn run_game_for_lobby(lobby_id: Uuid, server_arc: models::ServerArc, db_ar
 
     let server = server_arc.lock().await;
 
-    schedule_next_client_update(
+    tokio::spawn(ping_clients_in_lobby(
         server.lobbies.get(&lobby_id).unwrap().tick,
         lobby_id,
         server_arc.clone(),
         db_arc.clone(),
-        false,
-    )
-    .await;
+    ));
 }
 
 async fn ping_clients_in_lobby(
@@ -89,12 +87,7 @@ async fn ping_clients_in_lobby(
     lobby_id: Uuid,
     server_arc: models::ServerArc,
     db_arc: models::DbArc,
-    should_wait: bool,
 ) {
-    if should_wait {
-        time::sleep(Duration::from_secs(2)).await;
-    }
-
     info!("Running update of game state");
     let mut server = server_arc.lock().await;
 
@@ -157,14 +150,7 @@ async fn ping_clients_in_lobby(
 
     lobby.client_messages = HashMap::new();
 
-    schedule_next_client_update(
-        lobby.tick,
-        lobby_id,
-        server_arc.clone(),
-        db_arc.clone(),
-        true,
-    )
-    .await;
+    schedule_next_client_update(lobby.tick, lobby_id, server_arc.clone(), db_arc.clone()).await;
 }
 
 async fn schedule_next_client_update(
@@ -172,35 +158,41 @@ async fn schedule_next_client_update(
     lobby_id: Uuid,
     server_arc: models::ServerArc,
     db_arc: models::DbArc,
-    should_wait: bool,
 ) {
     let mut db = db_arc.lock().await;
 
-    let handle = start_next_client_update(
+    let handle = schedule_deffered_client_update(
         expected_tick,
         lobby_id,
         server_arc.clone(),
         db_arc.clone(),
-        should_wait,
     );
 
     db.open_tick_handles.insert(expected_tick, handle);
 }
 
-fn start_next_client_update(
+fn schedule_deffered_client_update(
     expected_tick: Uuid,
     lobby_id: Uuid,
     server_arc: models::ServerArc,
     db_arc: models::DbArc,
-    should_wait: bool,
 ) -> JoinHandle<()> {
-    tokio::spawn(ping_clients_in_lobby(
+    tokio::spawn(run_deffered_client_update(
         expected_tick,
         lobby_id,
         server_arc.clone(),
         db_arc.clone(),
-        should_wait,
     ))
+}
+
+async fn run_deffered_client_update(
+    expected_tick: Uuid,
+    lobby_id: Uuid,
+    server_arc: models::ServerArc,
+    db_arc: models::DbArc,
+) {
+    time::sleep(Duration::from_secs(2)).await;
+    ping_clients_in_lobby(expected_tick, lobby_id, server_arc.clone(), db_arc.clone()).await;
 }
 
 fn transform_map_of_players_to_list_of_player(
@@ -325,7 +317,6 @@ pub async fn check_all_clients_responded(
             lobby_id,
             server_arc.clone(),
             db_arc.clone(),
-            false,
         ));
     }
 }
