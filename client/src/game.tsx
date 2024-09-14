@@ -28,6 +28,7 @@ type Projectile = {
 
 type GameState = {
   tick: string;
+  tick_length_milli_seconds: number;
   players: Player[];
   entities: Projectile[];
 };
@@ -70,11 +71,7 @@ export default function Game() {
       wsRef.current.onmessage = (event) => {
         const newGameState: GameState = JSON.parse(event.data);
 
-        setGameState({
-          tick: Date.now().toString(),
-          players: newGameState.players,
-          entities: newGameState.entities,
-        });
+        setGameState(newGameState);
       };
 
       wsRef.current.onerror = (error) => {
@@ -262,7 +259,7 @@ export default function Game() {
                 </code>
                 <Countdown
                   key={gameState.tick}
-                  date={Date.now() + 2000 - 200}
+                  date={Date.now() + gameState.tick_length_milli_seconds - 200}
                   intervalDelay={200}
                   precision={3}
                   renderer={(props) => (
