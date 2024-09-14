@@ -25,3 +25,7 @@ rand = "0.8.5"
 warp = "0.3.7"
 http = "1.1.0"
 line_drawing = "1.0.0"
+
+[[bin]]
+name = "server"
+path = "./src/main.rs"
