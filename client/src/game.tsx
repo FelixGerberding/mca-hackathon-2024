@@ -22,7 +22,7 @@ type Projectile = {
   id: string;
   x: number;
   y: number;
-  rotation: number;
+  direction: number;
   entity_type: "PROJECTILE";
 };
 
@@ -85,7 +85,7 @@ const calculateTrajectoryEndpoint = (
   x: number,
   y: number,
   rotation: number,
-  length: number
+  length: number,
 ) => {
   const radians = (rotation * Math.PI) / 180;
   const endX = x + length * Math.cos(radians);
@@ -130,7 +130,7 @@ export default function Game() {
     };*/
 
     wsRef.current = new WebSocket(
-      `ws://localhost:8080/lobby/${lobbyId}?clientType=SPECTATOR&username=Test`
+      `ws://localhost:8080/lobby/${lobbyId}?clientType=SPECTATOR&username=Test`,
     );
 
     return () => {
@@ -193,7 +193,7 @@ export default function Game() {
           y2={i * 10 - 5}
           stroke="rgba(0,0,0,0.2)"
           strokeWidth="0.5"
-        />
+        />,
       );
     }
     return gridLines;
@@ -275,14 +275,14 @@ export default function Game() {
                       entity.x,
                       entity.y,
                       entity.rotation,
-                      10
+                      10,
                     );
 
                   const { endX, endY } = calculateTrajectoryEndpoint(
                     nextTurnX,
                     nextTurnY,
                     entity.rotation,
-                    100
+                    100,
                   );
 
                   return (
@@ -323,7 +323,7 @@ export default function Game() {
                           opacity: 1,
                           x: entity.x * 10,
                           y: entity.y * 10,
-                          rotate: entity.rotation,
+                          rotate: entity.direction,
                         }}
                         exit={{ opacity: 0 }}
                         transition={{ type: "spring", stiffness: 200 }}
