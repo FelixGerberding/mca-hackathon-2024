@@ -31,7 +31,7 @@ pub struct GameStateOut {
     pub entities: Vec<models::Projectile>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub enum ClientAction {
     TURN,
     UP,
@@ -40,7 +40,7 @@ pub enum ClientAction {
     RIGHT,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct ClientMessage {
     pub action: ClientAction,
     pub degrees: Option<i32>,

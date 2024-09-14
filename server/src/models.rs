@@ -11,6 +11,8 @@ use uuid::Uuid;
 use tokio::net::TcpStream;
 use tokio_tungstenite::tungstenite::Message;
 
+use crate::api_models::ClientMessage;
+
 #[derive(Debug, Serialize, Clone)]
 pub enum ClientType {
     PLAYER,
@@ -74,6 +76,7 @@ pub struct Client {
 pub struct Lobby {
     pub id: Uuid,
     pub clients: HashMap<SocketAddr, Client>,
+    pub client_messages: HashMap<SocketAddr, ClientMessage>,
     pub status: LobbyStatus,
     pub game_state: Option<GameState>,
 }

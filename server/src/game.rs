@@ -95,6 +95,24 @@ async fn ping_clients_in_lobby(
 
     let lobby = server.lobbies.get_mut(&lobby_id).unwrap();
 
+    lobby
+        .client_messages
+        .iter()
+        .for_each(|(addr, client_message)| {
+            update_state_of_player(
+                client_message.clone(),
+                lobby
+                    .game_state
+                    .as_mut()
+                    .unwrap()
+                    .players
+                    .get_mut(addr)
+                    .unwrap(),
+            );
+        });
+
+    lobby.client_messages = HashMap::new();
+
     let socket_addresses: Vec<SocketAddr> = lobby.clients.keys().cloned().collect();
 
     let game_state = lobby.game_state.clone().unwrap();

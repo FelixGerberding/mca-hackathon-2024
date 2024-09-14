@@ -111,6 +111,7 @@ async fn get_create_lobby_reply(
     let lobby_id = Uuid::new_v4();
 
     let new_lobby = models::Lobby {
+        client_messages: HashMap::new(),
         id: lobby_id,
         clients: HashMap::new(),
         status: models::LobbyStatus::PENDING,

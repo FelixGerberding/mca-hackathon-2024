@@ -72,22 +72,48 @@ async fn process_message_of_client(
         return;
     }
 
+    if !matches!(
+        server
+            .lobbies
+            .get(&lobby_id)
+            .unwrap()
+            .clients
+            .get(&addr)
+            .unwrap()
+            .client_type,
+        models::ClientType::PLAYER,
+    ) {
+        info!(
+            "Skipping message of non PLAYER client with address '{}'.",
+            addr
+        );
+        return;
+    }
+
     let client_message: api_models::ClientMessage = serde_json::from_str(&message.to_string())
         .expect(&format!("Cannot parse message of client {}", addr));
 
-    game::update_state_of_player(
-        client_message,
-        server
-            .lobbies
-            .get_mut(&lobby_id)
-            .unwrap()
-            .game_state
-            .as_mut()
-            .unwrap()
-            .players
-            .get_mut(&addr)
-            .unwrap(),
-    );
+    if server
+        .lobbies
+        .get_mut(&lobby_id)
+        .unwrap()
+        .client_messages
+        .get(&addr)
+        .is_some()
+    {
+        info!(
+            "Skipping message, because client with adddress '{}' supplied duplicate message during game tick.",
+            addr
+        );
+        return;
+    }
+
+    server
+        .lobbies
+        .get_mut(&lobby_id)
+        .unwrap()
+        .client_messages
+        .insert(addr, client_message);
 }
 
 pub async fn send_message_to_addr(addr: &SocketAddr, message: Message, db_arc: models::DbArc) {

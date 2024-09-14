@@ -45,6 +45,7 @@ async fn main() -> Result<(), Error> {
     let lobby_id = Uuid::parse_str("9ec2a984-b5bf-4a13-89fd-53c0d9cafef6").unwrap();
 
     let lobby = models::Lobby {
+        client_messages: HashMap::new(),
         clients: HashMap::new(),
         id: lobby_id,
         status: models::LobbyStatus::PENDING,
