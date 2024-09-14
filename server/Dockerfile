@@ -7,6 +7,6 @@ COPY ./Cargo.lock .
 
 RUN cargo install --path "." --locked
 
-CMD ["server"]
+CMD ["server", "0.0.0.0"]
 EXPOSE 8080
 EXPOSE 8081

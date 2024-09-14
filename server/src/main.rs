@@ -29,13 +29,13 @@ async fn main() -> Result<(), Error> {
     let _ = env_logger::try_init();
     let addr = env::args()
         .nth(1)
-        .unwrap_or_else(|| "127.0.0.1:8080".to_string());
+        .unwrap_or_else(|| "127.0.0.1".to_string());
 
     // Create the event loop and TCP listener we'll accept connections on.
-    let try_socket = TcpListener::bind(&addr).await;
+    let try_socket = TcpListener::bind(&format!("{addr}:8080")).await;
     let listener = try_socket.expect("Failed to bind");
 
-    info!("Listening on: {}", addr);
+    info!("Listening on: {}:8080", addr);
 
     let mut server = models::Server {
         lobbies: HashMap::new(),
@@ -74,11 +74,18 @@ async fn main() -> Result<(), Error> {
         server_arc.clone(),
     ));
 
+    let address_ip_parts: [u8; 4] = addr
+        .split(".")
+        .map(|str| str.parse::<u8>().unwrap())
+        .collect::<Vec<u8>>()
+        .try_into()
+        .unwrap();
+
     let rest_api = warp::serve(management_api::management_api(
         server_arc.clone(),
         db_arc.clone(),
     ))
-    .run(([127, 0, 0, 1], 8081));
+    .run((address_ip_parts, 8081));
     pin_mut!(rest_api);
 
     rest_api.await;
