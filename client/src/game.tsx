@@ -32,55 +32,6 @@ type GameState = {
   entities: Projectile[];
 };
 
-/*const generateMockGameState = (): GameState => {
-  const players: Player[] = [
-    {
-      id: "p1",
-      name: "Alice",
-      x: Math.round(Math.random() * 30),
-      y: Math.round(Math.random() * 30),
-      rotation: Math.random() * 360,
-      color: "#ff0000",
-      health: Math.floor(Math.random() * 100),
-      entity_type: "PLAYER",
-    },
-    {
-      id: "p2",
-      name: "Bob",
-      x: Math.round(Math.random() * 30),
-      y: Math.round(Math.random() * 30),
-      rotation: Math.random() * 360,
-      color: "#00ff00",
-      health: Math.floor(Math.random() * 100),
-      entity_type: "PLAYER",
-    },
-    {
-      id: "p3",
-      name: "Charlie",
-      x: Math.round(Math.random() * 30),
-      y: Math.round(Math.random() * 30),
-      rotation: Math.random() * 360,
-      color: "#0000ff",
-      health: Math.floor(Math.random() * 100),
-      entity_type: "PLAYER",
-    },
-  ];
-
-  const projectiles: Projectile[] = Array.from({ length: 5 }, (_, i) => ({
-    id: `proj${i}`,
-    x: Math.random() * 30,
-    y: Math.random() * 30,
-    rotation: Math.random() * 360,
-    entity_type: "PROJECTILE",
-  }));
-
-  return {
-    tick: Date.now().toString(),
-    entities: projectiles,
-    players: players,
-  };
-};*/
-
 const calculateTrajectoryEndpoint = (
   x: number,
   y: number,
@@ -89,7 +40,7 @@ const calculateTrajectoryEndpoint = (
 ) => {
   const radians = (rotation * Math.PI) / 180;
   const endX = x + length * Math.cos(radians);
-  const endY = y + length * Math.sin(radians);
+  const endY = y - length * Math.sin(radians); // Invert Y axis
   return { endX, endY };
 };
 
@@ -101,36 +52,8 @@ export default function Game() {
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    /*const mockWebSocket = {
-      onopen: null as (() => void) | null,
-      onmessage: null as ((event: { data: string }) => void) | null,
-      onerror: null as ((error: Event) => void) | null,
-      onclose: null as (() => void) | null,
-      close: () => {},
-    };
-
-    wsRef.current = mockWebSocket as unknown as WebSocket;
-
-    if (mockWebSocket.onopen) {
-      mockWebSocket.onopen();
-    }
-
-    const interval = setInterval(() => {
-      const mockData = generateMockGameState();
-      if (mockWebSocket.onmessage) {
-        mockWebSocket.onmessage({ data: JSON.stringify(mockData) });
-      }
-    }, 5000);
-
-    return () => {
-      clearInterval(interval);
-      if (mockWebSocket.onclose) {
-        mockWebSocket.onclose();
-      }
-    };*/
-
     wsRef.current = new WebSocket(
-      `ws://localhost:8080/lobby/${lobbyId}?clientType=SPECTATOR&username=Test`,
+      `ws://localhost:8080/lobby/${lobbyId}?clientType=SPECTATOR&username=SpectatorUI`,
     );
 
     return () => {
@@ -188,9 +111,9 @@ export default function Game() {
         <line
           key={`h${i}`}
           x1="0"
-          y1={i * 10 - 5}
+          y1={300 - (i * 10 - 5)}
           x2="300"
-          y2={i * 10 - 5}
+          y2={300 - (i * 10 - 5)}
           stroke="rgba(0,0,0,0.2)"
           strokeWidth="0.5"
         />,
@@ -241,7 +164,7 @@ export default function Game() {
                       animate={{
                         opacity: 1,
                         x: entity.x * 10,
-                        y: entity.y * 10,
+                        y: 300 - entity.y * 10, // Invert Y axis
                       }}
                       exit={{ opacity: 0 }}
                       transition={{ type: "spring", stiffness: 100 }}
@@ -253,7 +176,7 @@ export default function Game() {
                         y2="0"
                         stroke="black"
                         strokeWidth="1"
-                        transform={`rotate(${entity.rotation})`}
+                        transform={`rotate(${entity.rotation}, 0, 0)`}
                       />
                       <circle r="5" fill={entity.color} />
                       <text
@@ -267,21 +190,19 @@ export default function Game() {
                     </motion.g>
                   );
                 })}
-                ;
                 {gameState.entities.map((entity) => {
-                  // Projectile as an arrow
                   const { endX: nextTurnX, endY: nextTurnY } =
                     calculateTrajectoryEndpoint(
                       entity.x,
                       entity.y,
-                      entity.rotation,
+                      entity.direction,
                       10,
                     );
 
                   const { endX, endY } = calculateTrajectoryEndpoint(
                     nextTurnX,
                     nextTurnY,
-                    entity.rotation,
+                    entity.direction,
                     100,
                   );
 
@@ -291,9 +212,9 @@ export default function Game() {
                         <>
                           <motion.line
                             x1={entity.x * 10}
-                            y1={entity.y * 10}
+                            y1={300 - entity.y * 10} // Invert Y axis
                             x2={nextTurnX * 10}
-                            y2={nextTurnY * 10}
+                            y2={300 - nextTurnY * 10} // Invert Y axis
                             key={`${entity.id}-next-trajectory`}
                             stroke="rgba(0,0,0,1)"
                             strokeWidth="1"
@@ -303,9 +224,9 @@ export default function Game() {
                           />
                           <motion.line
                             x1={entity.x * 10}
-                            y1={entity.y * 10}
+                            y1={300 - entity.y * 10} // Invert Y axis
                             x2={endX * 10}
-                            y2={endY * 10}
+                            y2={300 - endY * 10} // Invert Y axis
                             key={`${entity.id}-trajectory`}
                             stroke="rgba(0,0,0,0.3)"
                             strokeWidth="1"
@@ -322,7 +243,7 @@ export default function Game() {
                         animate={{
                           opacity: 1,
                           x: entity.x * 10,
-                          y: entity.y * 10,
+                          y: 300 - entity.y * 10, // Invert Y axis
                           rotate: entity.direction,
                         }}
                         exit={{ opacity: 0 }}
@@ -331,7 +252,6 @@ export default function Game() {
                     </motion.g>
                   );
                 })}
-                ;
               </AnimatePresence>
             </svg>
             <div className="mt-4">
