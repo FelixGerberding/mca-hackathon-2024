@@ -41,7 +41,7 @@ const calculateTrajectoryEndpoint = (
 ) => {
   const radians = (rotation * Math.PI) / 180;
   const endX = x + length * Math.cos(radians);
-  const endY = y - length * Math.sin(radians); // Invert Y axis
+  const endY = y + length * Math.sin(radians); // Invert Y axis
   return { endX, endY };
 };
 
@@ -241,7 +241,7 @@ export default function Game() {
                           opacity: 1,
                           x: entity.x * 10,
                           y: 300 - entity.y * 10, // Invert Y axis
-                          rotate: entity.direction,
+                          rotate: entity.direction - 90, // to offset default svg rotation
                         }}
                         exit={{ opacity: 0 }}
                         transition={{ type: "spring", stiffness: 200 }}
