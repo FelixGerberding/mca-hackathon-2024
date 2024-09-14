@@ -27,6 +27,8 @@ pub struct UpdateLobbyBody {
 
 #[derive(Serialize)]
 pub struct GameStateOut {
+    pub tick: Uuid,
+    pub tick_length_milli_seconds: i32,
     pub players: Vec<models::Player>,
     pub entities: Vec<models::Projectile>,
 }
@@ -42,6 +44,7 @@ pub enum ClientAction {
 
 #[derive(Deserialize, Clone)]
 pub struct ClientMessage {
+    pub tick: Uuid,
     pub action: ClientAction,
     pub degrees: Option<i32>,
 }

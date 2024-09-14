@@ -21,7 +21,7 @@
 
     messageBodies = [
       { action: "RIGHT" },
-      { action: "TURN", degrees: 0 },
+      { tick: lobbyId, action: "TURN", degrees: 0 },
       { action: "RIGHT" },
       { action: "DOWN" },
       { action: "DOWN" },
@@ -32,11 +32,17 @@
       { action: "UP" },
     ];
 
-    socket.onmessage = (message) => {
-      console.log(message.data);
-      console.log(JSON.parse(message.data));
+    socket.onmessage = (incomingMessage) => {
+      console.log(incomingMessage.data);
+      let incoming = JSON.parse(incomingMessage.data);
+      console.log(incoming);
 
-      socket.send(JSON.stringify(messageBodies[i % 8]));
+      const message = { ...messageBodies[i % 8] };
+      message.tick = incoming.tick;
+
+      console.log("SENDING", message);
+
+      socket.send(JSON.stringify(message));
       i++;
     };
 

@@ -1,5 +1,6 @@
 use futures_util::stream::SplitStream;
 use futures_util::{future, pin_mut, SinkExt, TryStreamExt};
+use serde_json::Error;
 use std::net::SocketAddr;
 use tokio::net::TcpStream;
 use tokio_tungstenite::tungstenite::Message;
@@ -7,8 +8,8 @@ use tokio_tungstenite::WebSocketStream;
 
 use uuid::Uuid;
 
+use crate::api_models::ClientMessage;
 use crate::models;
-use crate::{api_models, game};
 
 use log::info;
 
@@ -90,30 +91,50 @@ async fn process_message_of_client(
         return;
     }
 
-    let client_message: api_models::ClientMessage = serde_json::from_str(&message.to_string())
-        .expect(&format!("Cannot parse message of client {}", addr));
+    let result: Result<ClientMessage, Error> = serde_json::from_str(&message.to_string());
+    match result {
+        Err(err) => {
+            info!(
+                "Failed to parse message from client with address '{}'. Original error: {}.",
+                addr, err
+            );
+            return;
+        }
+        Ok(client_message) => {
+            if server
+                .lobbies
+                .get_mut(&lobby_id)
+                .unwrap()
+                .client_messages
+                .get(&addr)
+                .is_some()
+            {
+                info!(
+                    "Skipping message, because client with adddress '{}' supplied duplicate message during game tick.",
+                    addr
+                );
+                return;
+            }
 
-    if server
-        .lobbies
-        .get_mut(&lobby_id)
-        .unwrap()
-        .client_messages
-        .get(&addr)
-        .is_some()
-    {
-        info!(
-            "Skipping message, because client with adddress '{}' supplied duplicate message during game tick.",
-            addr
+            let client_tick = client_message.tick;
+            let game_tick = server.lobbies.get(&lobby_id).unwrap().tick;
+
+            if client_tick != game_tick {
+                info!(
+            "Skipping message, because client with adddress '{}' used invalid tick '{}'. Current tick: '{}'.",
+            addr, game_tick, client_tick
         );
-        return;
-    }
+                return;
+            }
 
-    server
-        .lobbies
-        .get_mut(&lobby_id)
-        .unwrap()
-        .client_messages
-        .insert(addr, client_message);
+            server
+                .lobbies
+                .get_mut(&lobby_id)
+                .unwrap()
+                .client_messages
+                .insert(addr, client_message);
+        }
+    }
 }
 
 pub async fn send_message_to_addr(addr: &SocketAddr, message: Message, db_arc: models::DbArc) {

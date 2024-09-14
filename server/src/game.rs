@@ -112,11 +112,14 @@ async fn ping_clients_in_lobby(
         });
 
     lobby.client_messages = HashMap::new();
+    lobby.tick = Uuid::new_v4();
 
     let socket_addresses: Vec<SocketAddr> = lobby.clients.keys().cloned().collect();
 
     let game_state = lobby.game_state.clone().unwrap();
     let game_state_out = api_models::GameStateOut {
+        tick: lobby.tick,
+        tick_length_milli_seconds: lobby.tick_length_milli_seconds,
         entities: game_state.entities,
         players: transform_map_of_players_to_list_of_player(game_state.players),
     };
