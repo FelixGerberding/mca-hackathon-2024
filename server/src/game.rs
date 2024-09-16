@@ -16,7 +16,7 @@ use crate::models::Player;
 
 const MAX_FIELD_SIZE_X: i32 = 30;
 const MAX_FIELD_SIZE_Y: i32 = 30;
-const MAX_ROUNDS: i32 = 10;
+const MAX_ROUNDS: i32 = 500;
 const PROJECTILE_UNIT_LENGTH_TRAVEL: f64 = 6.0;
 
 pub async fn start_game_for_lobby(
