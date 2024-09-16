@@ -375,9 +375,8 @@ fn get_ending_coordinates_of_projectile(start_x: f64, start_y: f64, direction: i
 
 fn get_directional_vector_from_degrees(degrees: i32) -> (f64, f64) {
     let degrees_f64: f64 = degrees.into();
-    let divisor: f64 = 180.into();
 
-    let radians = (degrees_f64 * PI) / divisor;
+    let radians = ((90.0 - degrees_f64) * PI) / 180.0;
 
     return (f64::cos(radians), f64::sin(radians));
 }
