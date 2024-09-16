@@ -4,7 +4,8 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "start:local": "npm run start -- ws://localhost:8080/lobby/9ec2a984-b5bf-4a13-89fd-53c0d9cafef6"
+    "start:local": "npm run start -- ws://localhost:8080/lobby/9ec2a984-b5bf-4a13-89fd-53c0d9cafef6",
+    "start:remote": "npm run start -- ws://ys4k4og4k0kogkkck4k8scws.195.201.234.50.sslip.io:3080"
   },
   "license": "ISC",
   "devDependencies": {
