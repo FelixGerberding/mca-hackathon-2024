@@ -37,7 +37,7 @@ const calculateTrajectoryEndpoint = (
   x: number,
   y: number,
   rotation: number,
-  length: number
+  length: number,
 ) => {
   const radians = ((90 - rotation) * Math.PI) / 180;
   const endX = x + length * Math.cos(radians);
@@ -54,7 +54,7 @@ export default function Game() {
 
   useEffect(() => {
     wsRef.current = new WebSocket(
-      `ws://${import.meta.env.VITE_REMOTE_SOCKET}/lobby/${lobbyId}?clientType=SPECTATOR&username=SpectatorUI`,
+      `wss://${import.meta.env.VITE_REMOTE_SOCKET}/lobby/${lobbyId}?clientType=SPECTATOR&username=SpectatorUI`,
     );
 
     return () => {
@@ -114,7 +114,7 @@ export default function Game() {
           y2={300 - (i * 10 - 5)}
           stroke="rgba(0,0,0,0.2)"
           strokeWidth="0.5"
-        />
+        />,
       );
     }
     return gridLines;
@@ -194,14 +194,14 @@ export default function Game() {
                       entity.x,
                       entity.y,
                       entity.direction,
-                      10
+                      10,
                     );
 
                   const { endX, endY } = calculateTrajectoryEndpoint(
                     nextTurnX,
                     nextTurnY,
                     entity.direction,
-                    100
+                    100,
                   );
 
                   return (
