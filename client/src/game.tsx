@@ -54,11 +54,12 @@ export default function Game() {
 
   useEffect(() => {
     wsRef.current = new WebSocket(
-      `ws://localhost:8080/lobby/${lobbyId}?clientType=SPECTATOR&username=SpectatorUI`
+      `ws://${import.meta.env.VITE_REMOTE_SOCKET}/lobby/${lobbyId}?clientType=SPECTATOR&username=SpectatorUI`,
     );
 
     return () => {
       wsRef?.current?.close();
+      wsRef.current = null;
     };
   }, [lobbyId]);
 

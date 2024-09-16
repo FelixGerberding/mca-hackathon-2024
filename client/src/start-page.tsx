@@ -21,7 +21,9 @@ export default function StartPage() {
   useEffect(() => {
     const fetchLobbies = async () => {
       try {
-        const response = await fetch("http://localhost:8081/lobbies");
+        const response = await fetch(
+          `https://${import.meta.env.VITE_REMOTE_API}/lobbies`,
+        );
         const data = await response.json();
         setLobbies(data.lobbies);
       } catch (error) {
