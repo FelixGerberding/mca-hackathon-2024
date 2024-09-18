@@ -44,12 +44,9 @@ pub async fn listen_for_messages(
     println!("{} disconnected", addr);
 
     let mut server = server_arc.lock().await;
-    server
-        .lobbies
-        .get_mut(&lobby_id)
-        .unwrap()
-        .clients
-        .remove(&addr);
+    let lobby = server.lobbies.get_mut(&lobby_id).unwrap();
+
+    game::handle_client_disconnect(lobby, addr, db_arc.clone()).await;
 
     let mut db = db_arc.lock().await;
     db.connections.remove(&addr);
@@ -145,13 +142,13 @@ async fn process_message_of_client(
     }
 }
 
-pub async fn send_message_to_addr(addr: &SocketAddr, message: Message, db_arc: models::DbArc) {
+pub async fn send_message_to_addr(addr: SocketAddr, message: Message, db_arc: models::DbArc) {
     let mut db = db_arc.lock().await;
 
     info!("Sending message to client with address '{}'", addr);
 
     db.connections
-        .get_mut(addr)
+        .get_mut(&addr)
         .expect(&format!(
             "No connection found for client with address '{}'",
             addr

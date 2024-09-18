@@ -28,7 +28,8 @@ pub async fn start_game_for_lobby(
 
     let lobby = server.lobbies.get_mut(&lobby_id).unwrap();
 
-    lobby.game_state = get_initial_game_state(lobby);
+    lobby.client_messages = HashMap::new();
+    lobby.round = 0;
 
     tokio::spawn(run_game_for_lobby(
         lobby_id,
@@ -113,6 +114,12 @@ async fn ping_clients_in_lobby(
 
     calculate_projectile_updates(game_state);
 
+    push_game_state_to_clients_in_lobby(lobby, db_arc.clone()).await;
+
+    schedule_next_client_update(lobby.tick, lobby_id, server_arc.clone(), db_arc.clone()).await;
+}
+
+async fn push_game_state_to_clients_in_lobby(lobby: &mut models::Lobby, db_arc: models::DbArc) {
     lobby.tick = Uuid::new_v4();
     lobby.round += 1;
 
@@ -128,12 +135,11 @@ async fn ping_clients_in_lobby(
 
     for addr in socket_addresses {
         let game_state_string = serde_json::to_string(&game_state_out).unwrap();
-        client_handling::send_message_to_addr(
-            &addr,
+        tokio::spawn(client_handling::send_message_to_addr(
+            addr.clone(),
             tokio_tungstenite::tungstenite::Message::Text(game_state_string),
             db_arc.clone(),
-        )
-        .await;
+        ));
     }
 
     if lobby.round >= MAX_ROUNDS {
@@ -146,8 +152,6 @@ async fn ping_clients_in_lobby(
     }
 
     lobby.client_messages = HashMap::new();
-
-    schedule_next_client_update(lobby.tick, lobby_id, server_arc.clone(), db_arc.clone()).await;
 }
 
 async fn schedule_next_client_update(
@@ -196,6 +200,31 @@ fn transform_map_of_players_to_list_of_player(
     map_of_player: HashMap<SocketAddr, Player>,
 ) -> Vec<Player> {
     return map_of_player.values().cloned().collect();
+}
+
+pub async fn handle_client_connect(
+    lobby: &mut models::Lobby,
+    addr: SocketAddr,
+    new_client: models::Client,
+    db_arc: models::DbArc,
+) {
+    lobby.clients.insert(addr, new_client);
+
+    lobby.game_state = get_initial_game_state(lobby);
+
+    push_game_state_to_clients_in_lobby(lobby, db_arc.clone()).await;
+}
+
+pub async fn handle_client_disconnect(
+    lobby: &mut models::Lobby,
+    addr: SocketAddr,
+    db_arc: models::DbArc,
+) {
+    lobby.clients.remove(&addr);
+
+    lobby.game_state.as_mut().unwrap().players.remove(&addr);
+
+    push_game_state_to_clients_in_lobby(lobby, db_arc.clone()).await;
 }
 
 fn handle_client_message(

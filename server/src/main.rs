@@ -170,30 +170,14 @@ async fn listen_for_connections(
 
         let mut server = server_arc.lock().await;
 
-        info!(
-            "Lobby is currently in state: '{:?}'",
-            server.lobbies.get(&lobby_uuid).unwrap().status
-        );
+        let lobby = server.lobbies.get_mut(&lobby_uuid).unwrap();
 
-        if matches!(
-            server.lobbies.get(&lobby_uuid).unwrap().status,
-            models::LobbyStatus::PENDING
-        ) {
-            server
-                .lobbies
-                .get_mut(&lobby_uuid)
-                .unwrap()
-                .clients
-                .insert(addr, new_client);
-
+        if matches!(lobby.status, models::LobbyStatus::PENDING) {
             let mut db = db_arc.lock().await;
 
             db.connections.insert(addr, new_connection);
 
-            info!(
-                "Added client to lobby. List of clients: {:?}",
-                server.lobbies.get(&lobby_uuid).unwrap().clients
-            );
+            game::handle_client_connect(lobby, addr, new_client, db_arc.clone()).await;
 
             tokio::spawn(client_handling::listen_for_messages(
                 read,
