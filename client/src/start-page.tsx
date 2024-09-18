@@ -22,7 +22,7 @@ export default function StartPage() {
     const fetchLobbies = async () => {
       try {
         const response = await fetch(
-          `https://${import.meta.env.VITE_REMOTE_API}/lobbies`,
+          `${import.meta.env.VITE_REMOTE_API}/lobbies`
         );
         const data = await response.json();
         setLobbies(data.lobbies);
