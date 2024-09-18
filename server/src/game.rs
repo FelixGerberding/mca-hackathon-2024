@@ -17,7 +17,7 @@ use crate::models::Player;
 const MAX_FIELD_SIZE_X: i32 = 30;
 const MAX_FIELD_SIZE_Y: i32 = 30;
 const MAX_ROUNDS: i32 = 500;
-const PROJECTILE_UNIT_LENGTH_TRAVEL: f64 = 6.0;
+const PROJECTILE_UNIT_LENGTH_TRAVEL_DISTANCE: f64 = 6.0;
 
 pub async fn start_game_for_lobby(
     lobby_id: Uuid,
@@ -240,7 +240,10 @@ fn handle_client_message(
     match client_message.action {
         api_models::ClientAction::SHOOT => {
             let new_projectile = models::Projectile {
+                travel_distance: PROJECTILE_UNIT_LENGTH_TRAVEL_DISTANCE,
                 id: Uuid::new_v4(),
+                previous_x: player.x.into(),
+                previous_y: player.y.into(),
                 x: player.x.into(),
                 y: player.y.into(),
                 direction: player.rotation,
@@ -380,6 +383,8 @@ fn calculate_projectile_updates(game_state: &mut models::GameState) {
         let ending_coordinates =
             get_ending_coordinates_of_projectile(projectile.x, projectile.y, projectile.direction);
 
+        projectile.previous_x = projectile.x;
+        projectile.previous_y = projectile.y;
         projectile.x = ending_coordinates.0;
         projectile.y = ending_coordinates.1;
     })
@@ -396,8 +401,8 @@ fn get_fields_passed_by_projectile(projectile: &models::Projectile) -> Vec<(i32,
 fn get_ending_coordinates_of_projectile(start_x: f64, start_y: f64, direction: i32) -> (f64, f64) {
     let directional_vector = get_directional_vector_from_degrees(direction);
 
-    let end_x = start_x + PROJECTILE_UNIT_LENGTH_TRAVEL * directional_vector.0;
-    let end_y = start_y + PROJECTILE_UNIT_LENGTH_TRAVEL * directional_vector.1;
+    let end_x = start_x + PROJECTILE_UNIT_LENGTH_TRAVEL_DISTANCE * directional_vector.0;
+    let end_y = start_y + PROJECTILE_UNIT_LENGTH_TRAVEL_DISTANCE * directional_vector.1;
 
     return (end_x, end_y);
 }

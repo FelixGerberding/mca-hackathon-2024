@@ -19,7 +19,10 @@ type Player = {
 };
 
 type Projectile = {
+  travel_distance: number;
   id: string;
+  previous_x: number;
+  previous_y: number;
   x: number;
   y: number;
   direction: number;
@@ -196,7 +199,7 @@ export default function Game() {
                       entity.x,
                       entity.y,
                       entity.direction,
-                      10
+                      entity.travel_distance
                     );
 
                   const { endX, endY } = calculateTrajectoryEndpoint(
@@ -239,7 +242,11 @@ export default function Game() {
                       <motion.path
                         d="M-5,-2 L5,0 L-5,2 Z"
                         fill="black"
-                        initial={{ opacity: 0 }}
+                        initial={{
+                          opacity: 0,
+                          x: entity.previous_x * 10,
+                          y: 300 - entity.previous_y * 10,
+                        }}
                         animate={{
                           opacity: 1,
                           x: entity.x * 10,
