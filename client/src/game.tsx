@@ -273,7 +273,13 @@ export default function Game() {
                   intervalDelay={200}
                   precision={3}
                   renderer={(props) => (
-                    <Progress value={(props.total / (5000 - 200)) * 100} />
+                    <Progress
+                      value={
+                        (props.total /
+                          (gameState.tick_length_milli_seconds - 200)) *
+                        100
+                      }
+                    />
                   )}
                 />
               </h3>
