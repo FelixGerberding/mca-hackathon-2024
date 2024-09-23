@@ -172,7 +172,10 @@ async fn listen_for_connections(
 
         let lobby = server.lobbies.get_mut(&lobby_uuid).unwrap();
 
-        if matches!(lobby.status, models::LobbyStatus::PENDING) {
+        if matches!(new_client.client_type, models::ClientType::SPECTATOR)
+            || (matches!(new_client.client_type, models::ClientType::PLAYER)
+                && matches!(lobby.status, models::LobbyStatus::PENDING))
+        {
             let mut db = db_arc.lock().await;
 
             db.connections.insert(addr, new_connection);

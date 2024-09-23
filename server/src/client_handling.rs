@@ -61,10 +61,9 @@ async fn process_message_of_client(
 ) {
     let mut server = server_arc.lock().await;
 
-    if !matches!(
-        server.lobbies.get(&lobby_id).unwrap().status,
-        models::LobbyStatus::RUNNING
-    ) {
+    let lobby = server.lobbies.get_mut(&lobby_id).unwrap();
+
+    if !matches!(lobby.status, models::LobbyStatus::RUNNING) {
         info!(
             "Skipping message of client with address '{}'. Lobby is not running at the moment.",
             addr
@@ -72,17 +71,17 @@ async fn process_message_of_client(
         return;
     }
 
-    if !matches!(
-        server
-            .lobbies
-            .get(&lobby_id)
-            .unwrap()
-            .clients
-            .get(&addr)
-            .unwrap()
-            .client_type,
-        models::ClientType::PLAYER,
-    ) {
+    if message.is_close() {
+        info!(
+            "Skipping message of client with address '{}'. The client disconnected.",
+            addr
+        );
+        return;
+    }
+
+    let client = lobby.clients.get(&addr).unwrap();
+
+    if !matches!(client.client_type, models::ClientType::PLAYER,) {
         info!(
             "Skipping message of non PLAYER client with address '{}'.",
             addr
@@ -100,38 +99,26 @@ async fn process_message_of_client(
             return;
         }
         Ok(client_message) => {
-            if server
-                .lobbies
-                .get_mut(&lobby_id)
-                .unwrap()
-                .client_messages
-                .get(&addr)
-                .is_some()
-            {
+            if lobby.client_messages.get(&addr).is_some() {
                 info!(
-                    "Skipping message, because client with adddress '{}' supplied duplicate message during game tick.",
-                    addr
-                );
+                            "Skipping message, because client with adddress '{}' supplied duplicate message during game tick.",
+                            addr
+                        );
                 return;
             }
 
             let client_tick = client_message.tick;
-            let game_tick = server.lobbies.get(&lobby_id).unwrap().tick;
+            let game_tick = lobby.tick;
 
             if client_tick != game_tick {
                 info!(
-            "Skipping message, because client with adddress '{}' used invalid tick '{}'. Current tick: '{}'.",
-            addr, game_tick, client_tick
-        );
+                    "Skipping message, because client with adddress '{}' used invalid tick '{}'. Current tick: '{}'.",
+                    addr, game_tick, client_tick
+                );
                 return;
             }
 
-            server
-                .lobbies
-                .get_mut(&lobby_id)
-                .unwrap()
-                .client_messages
-                .insert(addr, client_message);
+            lobby.client_messages.insert(addr, client_message);
 
             tokio::spawn(game::check_all_clients_responded(
                 lobby_id,

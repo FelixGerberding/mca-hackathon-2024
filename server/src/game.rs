@@ -100,6 +100,9 @@ async fn ping_clients_in_lobby(
             "Skipping scheduled update of clients for tick '{}'",
             expected_tick
         );
+
+        schedule_next_client_update(lobby.tick, lobby_id, server_arc.clone(), db_arc.clone()).await;
+
         return;
     }
 
