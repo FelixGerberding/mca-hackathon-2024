@@ -1,0 +1,122 @@
+openapi: 3.0.3
+info:
+  title: Management API
+  description: |-
+
+  version: 1.0.0
+servers:
+  - url: http://localhost:8081/
+tags:
+  - name: Lobby
+    description: Everything about lobbies
+paths:
+  /lobbies:
+    get:
+      tags:
+        - Lobby
+      summary: Get all available lobbies
+      description: Get all available lobbies
+      responses:
+        "200":
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lobbies"
+    post:
+      tags:
+        - Lobby
+      summary: Create a new lobby
+      description: Create a new lobby
+      responses:
+        "200":
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LobbyCreate"
+  /lobbies/{lobbyId}:
+    parameters:
+      - name: lobbyId
+        in: path
+        description: ID of the lobby to update
+        required: true
+        schema:
+          type: string
+    patch:
+      tags:
+        - Lobby
+      summary: Update lobby
+      description: Update lobby
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LobbyUpdate"
+      responses:
+        "200":
+          description: Successful operation
+        "404":
+          description: Lobby not found
+        "422":
+          description: The desired update cannot be processed
+          content:
+            text/plain:
+              example: Additional details why the lobby cannot be updated
+
+components:
+  schemas:
+    Client:
+      type: object
+      required:
+        - client_type
+        - username
+      properties:
+        username:
+          type: string
+          example: "testuser123"
+        client_type:
+          type: string
+          format: uuid
+          example: "9ec2a984-b5bf-4a13-89fd-53c0d9cafef6"
+    LobbyBase:
+      type: object
+      required:
+        - id
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "9ec2a984-b5bf-4a13-89fd-53c0d9cafef6"
+    LobbyUpdate:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum: ["PENDING", "RUNNING", "FINISHED"]
+          example: "RUNNING"
+    LobbyCreate:
+      allOf:
+        - $ref: "#/components/schemas/LobbyBase"
+    Lobby:
+      required:
+        - clients
+      allOf:
+        - $ref: "#/components/schemas/LobbyBase"
+        - type: object
+          properties:
+            clients:
+              type: array
+              items:
+                $ref: "#/components/schemas/Client"
+    Lobbies:
+      type: object
+      required:
+        - lobbies
+      properties:
+        lobbies:
+          type: array
+          items:
+            $ref: "#/components/schemas/Lobby"
