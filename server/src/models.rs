@@ -16,13 +16,13 @@ use crate::api_models::ClientMessage;
 
 pub const TICK_LENGTH_MILLI_SECONDS: i32 = 2000;
 
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Clone, PartialEq)]
 pub enum ClientType {
     PLAYER,
     SPECTATOR,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub enum LobbyStatus {
     PENDING,
     RUNNING,

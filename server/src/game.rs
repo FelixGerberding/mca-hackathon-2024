@@ -119,7 +119,9 @@ async fn ping_clients_in_lobby(
 
     push_game_state_to_clients_in_lobby(lobby, db_arc.clone()).await;
 
-    schedule_next_client_update(lobby.tick, lobby_id, server_arc.clone(), db_arc.clone()).await;
+    if lobby.status != models::LobbyStatus::FINISHED {
+        schedule_next_client_update(lobby.tick, lobby_id, server_arc.clone(), db_arc.clone()).await;
+    }
 }
 
 async fn push_game_state_to_clients_in_lobby(lobby: &mut models::Lobby, db_arc: models::DbArc) {
@@ -211,9 +213,11 @@ pub async fn handle_client_connect(
     new_client: models::Client,
     db_arc: models::DbArc,
 ) {
-    lobby.clients.insert(addr, new_client);
+    lobby.clients.insert(addr, new_client.clone());
 
-    lobby.game_state = get_initial_game_state(lobby);
+    if new_client.client_type == models::ClientType::PLAYER {
+        lobby.game_state = get_initial_game_state(lobby);
+    }
 
     push_game_state_to_clients_in_lobby(lobby, db_arc.clone()).await;
 }
