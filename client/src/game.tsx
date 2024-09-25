@@ -104,9 +104,9 @@ export default function Game() {
       gridLines.push(
         <line
           key={`v${i}`}
-          x1={i * 10 - 5}
+          x1={i * 10}
           y1="0"
-          x2={i * 10 - 5}
+          x2={i * 10}
           y2="300"
           stroke="rgba(0,0,0,0.2)"
           strokeWidth="0.5"
@@ -114,9 +114,9 @@ export default function Game() {
         <line
           key={`h${i}`}
           x1="0"
-          y1={300 - (i * 10 - 5)}
+          y1={300 - i * 10}
           x2="300"
-          y2={300 - (i * 10 - 5)}
+          y2={300 - i * 10}
           stroke="rgba(0,0,0,0.2)"
           strokeWidth="0.5"
         />
@@ -166,8 +166,8 @@ export default function Game() {
                       initial={{ opacity: 0 }}
                       animate={{
                         opacity: 1,
-                        x: entity.x * 10,
-                        y: 300 - entity.y * 10, // Invert Y axis
+                        x: entity.x * 10 + 5,
+                        y: 300 - entity.y * 10 - 5, // Invert Y axis
                       }}
                       exit={{ opacity: 0 }}
                       transition={{ type: "spring", stiffness: 100 }}
@@ -214,10 +214,10 @@ export default function Game() {
                       {showTrajectory && (
                         <>
                           <motion.line
-                            x1={entity.x * 10}
-                            y1={300 - entity.y * 10} // Invert Y axis
-                            x2={nextTurnX * 10}
-                            y2={300 - nextTurnY * 10} // Invert Y axis
+                            x1={entity.x * 10 + 5}
+                            y1={300 - entity.y * 10 - 5} // Invert Y axis
+                            x2={nextTurnX * 10 + 5}
+                            y2={300 - nextTurnY * 10 - 5} // Invert Y axis
                             key={`${entity.id}-next-trajectory`}
                             stroke="rgba(0,0,0,1)"
                             strokeWidth="1"
@@ -226,10 +226,10 @@ export default function Game() {
                             transition={{ duration: 0.5 }}
                           />
                           <motion.line
-                            x1={entity.x * 10}
-                            y1={300 - entity.y * 10} // Invert Y axis
-                            x2={endX * 10}
-                            y2={300 - endY * 10} // Invert Y axis
+                            x1={entity.x * 10 + 5}
+                            y1={300 - entity.y * 10 - 5} // Invert Y axis
+                            x2={endX * 10 + 5}
+                            y2={300 - endY * 10 - 5} // Invert Y axis
                             key={`${entity.id}-trajectory`}
                             stroke="rgba(0,0,0,0.3)"
                             strokeWidth="1"
@@ -244,13 +244,13 @@ export default function Game() {
                         fill="black"
                         initial={{
                           opacity: 0,
-                          x: entity.previous_x * 10,
-                          y: 300 - entity.previous_y * 10,
+                          x: entity.previous_x * 10 + 5,
+                          y: 300 - entity.previous_y * 10 - 5,
                         }}
                         animate={{
                           opacity: 1,
-                          x: entity.x * 10,
-                          y: 300 - entity.y * 10, // Invert Y axis
+                          x: entity.x * 10 + 5,
+                          y: 300 - entity.y * 10 - 5, // Invert Y axis
                           rotate: entity.direction - 90, // to offset default svg rotation
                         }}
                         exit={{ opacity: 0 }}

@@ -275,7 +275,7 @@ fn handle_client_message(
             player.rotation = degrees;
         }
         api_models::ClientAction::UP => {
-            if player.y < MAX_FIELD_SIZE_Y {
+            if player.y < MAX_FIELD_SIZE_Y - 1 {
                 player.y += 1;
             } else {
                 player.error_message =
@@ -293,7 +293,7 @@ fn handle_client_message(
             }
         }
         api_models::ClientAction::RIGHT => {
-            if player.x < MAX_FIELD_SIZE_X {
+            if player.x < MAX_FIELD_SIZE_X - 1 {
                 player.x += 1;
             } else {
                 player.error_message =
