@@ -1,3 +1,4 @@
+use lazy_static::lazy_static;
 use log::info;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -11,13 +12,40 @@ use uuid::Uuid;
 use crate::api_models;
 use crate::client_handling;
 use crate::models;
-use crate::models::GameState;
 use crate::models::Player;
 
 const MAX_FIELD_SIZE_X: i32 = 30;
 const MAX_FIELD_SIZE_Y: i32 = 30;
 const MAX_ROUNDS: i32 = 500;
 const PROJECTILE_UNIT_LENGTH_TRAVEL_DISTANCE: f64 = 6.0;
+
+lazy_static! {
+    static ref PLAYER_COUNT_TO_POSITIONS: HashMap<usize, Vec<(i32, i32)>> = {
+        let mut m = HashMap::new();
+        m.insert(1, vec![(14, 14)]);
+        m.insert(2, vec![(5, 14), (24, 14)]);
+        m.insert(3, vec![(5, 5), (24, 5), (14, 24)]);
+        m.insert(4, vec![(5, 5), (24, 5), (5, 24), (24, 24)]);
+        m.insert(5, vec![(5, 5), (24, 5), (5, 24), (24, 24), (14, 14)]);
+        m.insert(
+            6,
+            vec![(5, 5), (5, 14), (5, 24), (24, 5), (24, 14), (24, 24)],
+        );
+        m.insert(
+            7,
+            vec![
+                (5, 5),
+                (5, 14),
+                (5, 24),
+                (24, 5),
+                (24, 14),
+                (24, 24),
+                (14, 14),
+            ],
+        );
+        m
+    };
+}
 
 pub async fn start_game_for_lobby(
     lobby_id: Uuid,
@@ -38,38 +66,28 @@ pub async fn start_game_for_lobby(
     ));
 }
 
-fn get_initial_game_state(lobby: &mut models::Lobby) -> Option<GameState> {
-    let players = lobby
-        .clients
-        .iter()
-        .zip(0i32..)
-        .filter_map(|((addr, client), index)| match client.client_type {
-            models::ClientType::PLAYER => {
-                let player = models::Player {
-                    entity_type: models::EntityType::PLAYER,
-                    id: Uuid::new_v4(),
-                    name: client.username.clone(),
-                    x: index + 5,
-                    y: index + 5,
-                    rotation: 100,
-                    color: "#FF00FF".to_string(),
-                    health: 100,
-                    last_action_success: true,
-                    error_message: "".to_string(),
-                };
+fn update_initial_player_positions(lobby: &mut models::Lobby) -> Result<(), String> {
+    let player_count = lobby.game_state.players.len();
+    if player_count > PLAYER_COUNT_TO_POSITIONS.len() {
+        return Err(
+            "Cannot add player, because no starting formation is maintained for the player count."
+                .to_string(),
+        );
+    }
 
-                return Some((addr.clone(), player));
-            }
-            _ => None,
-        })
-        .collect();
+    let starting_positions = PLAYER_COUNT_TO_POSITIONS.get(&player_count).unwrap();
 
-    let game_state = GameState {
-        players: players,
-        entities: Vec::new(),
-    };
+    lobby
+        .game_state
+        .players
+        .values_mut()
+        .enumerate()
+        .for_each(|(index, player)| {
+            player.x = starting_positions[index].0;
+            player.y = starting_positions[index].1;
+        });
 
-    return Some(game_state);
+    return Ok(());
 }
 
 async fn run_game_for_lobby(lobby_id: Uuid, server_arc: models::ServerArc, db_arc: models::DbArc) {
@@ -101,12 +119,10 @@ async fn ping_clients_in_lobby(
             expected_tick
         );
 
-        schedule_next_client_update(lobby.tick, lobby_id, server_arc.clone(), db_arc.clone()).await;
-
         return;
     }
 
-    let game_state = lobby.game_state.as_mut().unwrap();
+    let game_state = &mut lobby.game_state;
 
     lobby
         .client_messages
@@ -117,35 +133,16 @@ async fn ping_clients_in_lobby(
 
     calculate_projectile_updates(game_state);
 
-    push_game_state_to_clients_in_lobby(lobby, db_arc.clone()).await;
+    ping_clients_with_new_tick(lobby, db_arc.clone());
 
     if lobby.status != models::LobbyStatus::FINISHED {
         schedule_next_client_update(lobby.tick, lobby_id, server_arc.clone(), db_arc.clone()).await;
     }
 }
 
-async fn push_game_state_to_clients_in_lobby(lobby: &mut models::Lobby, db_arc: models::DbArc) {
+fn ping_clients_with_new_tick(lobby: &mut models::Lobby, db_arc: models::DbArc) {
     lobby.tick = Uuid::new_v4();
     lobby.round += 1;
-
-    let socket_addresses: Vec<SocketAddr> = lobby.clients.keys().cloned().collect();
-
-    let game_state = lobby.game_state.clone().unwrap();
-    let game_state_out = api_models::GameStateOut {
-        tick: lobby.tick,
-        tick_length_milli_seconds: lobby.tick_length_milli_seconds,
-        entities: game_state.entities,
-        players: transform_map_of_players_to_list_of_player(game_state.players),
-    };
-
-    for addr in socket_addresses {
-        let game_state_string = serde_json::to_string(&game_state_out).unwrap();
-        tokio::spawn(client_handling::send_message_to_addr(
-            addr.clone(),
-            tokio_tungstenite::tungstenite::Message::Text(game_state_string),
-            db_arc.clone(),
-        ));
-    }
 
     if lobby.round >= MAX_ROUNDS {
         info!(
@@ -157,6 +154,66 @@ async fn push_game_state_to_clients_in_lobby(lobby: &mut models::Lobby, db_arc: 
     }
 
     lobby.client_messages = HashMap::new();
+
+    push_game_state_to_everyone(lobby, db_arc.clone());
+}
+
+fn push_game_state_to_everyone(lobby: &mut models::Lobby, db_arc: models::DbArc) {
+    let socket_addresses: Vec<SocketAddr> = lobby.clients.keys().cloned().collect();
+
+    push_game_state_to_addresses(lobby, socket_addresses, db_arc.clone());
+}
+
+fn push_game_state_to_spectators(lobby: &mut models::Lobby, db_arc: models::DbArc) {
+    let socket_addresses: Vec<SocketAddr> = lobby
+        .clients
+        .iter()
+        .filter_map(|(addr, client)| {
+            if client.client_type == models::ClientType::SPECTATOR {
+                return Some(addr);
+            }
+            return None;
+        })
+        .cloned()
+        .collect();
+
+    push_game_state_to_addresses(lobby, socket_addresses, db_arc.clone());
+}
+
+fn push_game_state_to_addresses(
+    lobby: &mut models::Lobby,
+    socket_addresses: Vec<SocketAddr>,
+    db_arc: models::DbArc,
+) {
+    let game_state_out = get_game_state_out(lobby);
+
+    for addr in socket_addresses {
+        push_game_state_to_address(addr, &game_state_out, db_arc.clone());
+    }
+}
+
+fn push_game_state_to_address(
+    addr: SocketAddr,
+    game_state_out: &api_models::GameStateOut,
+    db_arc: models::DbArc,
+) {
+    info!("Pushing game state for tick '{}'", game_state_out.tick);
+    let game_state_string = serde_json::to_string(game_state_out).unwrap();
+    tokio::spawn(client_handling::send_message_to_addr(
+        addr.clone(),
+        tokio_tungstenite::tungstenite::Message::Text(game_state_string),
+        db_arc.clone(),
+    ));
+}
+
+fn get_game_state_out(lobby: &mut models::Lobby) -> api_models::GameStateOut {
+    let game_state = lobby.game_state.clone();
+    return api_models::GameStateOut {
+        tick: lobby.tick,
+        tick_length_milli_seconds: lobby.tick_length_milli_seconds,
+        entities: game_state.entities,
+        players: transform_map_of_players_to_list_of_player(game_state.players),
+    };
 }
 
 async fn schedule_next_client_update(
@@ -212,26 +269,67 @@ pub async fn handle_client_connect(
     addr: SocketAddr,
     new_client: models::Client,
     db_arc: models::DbArc,
-) {
+) -> Result<Option<api_models::ClientHello>, String> {
     lobby.clients.insert(addr, new_client.clone());
 
     if new_client.client_type == models::ClientType::PLAYER {
-        lobby.game_state = get_initial_game_state(lobby);
+        let player_id = Uuid::new_v4();
+
+        let new_player = models::Player {
+            entity_type: models::EntityType::PLAYER,
+            id: player_id,
+            name: new_client.username.clone(),
+            x: 0,
+            y: 0,
+            rotation: 100,
+            color: "#FF00FF".to_string(),
+            health: 100,
+            last_action_success: true,
+            error_message: "".to_string(),
+        };
+
+        lobby.game_state.players.insert(addr, new_player);
+
+        let client_hello = match update_initial_player_positions(lobby) {
+            Ok(()) => {
+                push_game_state_to_spectators(lobby, db_arc.clone());
+                api_models::ClientHello {
+                    success: true,
+                    player_id: player_id,
+                    message: "Connection successful.".to_string(),
+                }
+            }
+
+            Err(error_message) => {
+                return Err(error_message);
+            }
+        };
+
+        return Ok(Some(client_hello));
     }
 
-    push_game_state_to_clients_in_lobby(lobby, db_arc.clone()).await;
+    push_game_state_to_spectators(lobby, db_arc.clone());
+    return Ok(None);
 }
 
-pub async fn handle_client_disconnect(
+pub fn handle_client_disconnect(
     lobby: &mut models::Lobby,
     addr: SocketAddr,
     db_arc: models::DbArc,
 ) {
+    let client_type = lobby.clients.get(&addr).unwrap().client_type.clone();
+
     lobby.clients.remove(&addr);
 
-    lobby.game_state.as_mut().unwrap().players.remove(&addr);
+    info!("Client of type {:?} disconnected", client_type);
 
-    push_game_state_to_clients_in_lobby(lobby, db_arc.clone()).await;
+    if client_type == models::ClientType::PLAYER {
+        lobby.game_state.players.remove(&addr);
+
+        ping_clients_with_new_tick(lobby, db_arc.clone());
+    } else {
+        push_game_state_to_spectators(lobby, db_arc.clone());
+    }
 }
 
 fn handle_client_message(
@@ -350,7 +448,7 @@ pub async fn check_all_clients_responded(
         .cloned()
         .collect();
 
-    if expected_client_addresses == clients_that_answered {
+    if clients_that_answered.is_superset(&expected_client_addresses) {
         let mut db = db_arc.lock().await;
 
         let expected_tick = server.lobbies.get(&lobby_id).unwrap().tick;
@@ -360,10 +458,16 @@ pub async fn check_all_clients_responded(
             expected_tick
         );
 
-        db.open_tick_handles.get(&expected_tick).unwrap().abort();
-        db.open_tick_handles.remove(&expected_tick);
-
-        info!("Canceled scheduled update for tick '{}'", expected_tick);
+        match db.open_tick_handles.get(&expected_tick) {
+            Some(tick_handle) => {
+                tick_handle.abort();
+                db.open_tick_handles.remove(&expected_tick);
+                info!("Canceled scheduled update for tick '{}'", expected_tick);
+            }
+            None => {
+                info!("No scheduled update found for tick '{}'", expected_tick)
+            }
+        };
 
         tokio::spawn(ping_clients_in_lobby(
             expected_tick,

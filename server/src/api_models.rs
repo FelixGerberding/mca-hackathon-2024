@@ -33,6 +33,13 @@ pub struct GameStateOut {
     pub entities: Vec<models::Projectile>,
 }
 
+#[derive(Serialize)]
+pub struct ClientHello {
+    pub success: bool,
+    pub message: String,
+    pub player_id: Uuid,
+}
+
 #[derive(Deserialize, Clone)]
 pub enum ClientAction {
     SHOOT,

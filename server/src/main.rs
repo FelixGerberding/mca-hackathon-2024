@@ -6,6 +6,7 @@ use std::sync::Arc;
 use std::{env, io::Error};
 
 use futures_util::{pin_mut, SinkExt, StreamExt};
+use models::Connection;
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
@@ -52,7 +53,10 @@ async fn main() -> Result<(), Error> {
         clients: HashMap::new(),
         id: lobby_id,
         status: models::LobbyStatus::PENDING,
-        game_state: None,
+        game_state: models::GameState {
+            players: HashMap::new(),
+            entities: Vec::new(),
+        },
     };
 
     info!("Lobby created with id: {}", lobby.id);
@@ -178,31 +182,50 @@ async fn listen_for_connections(
         {
             let mut db = db_arc.lock().await;
 
-            db.connections.insert(addr, new_connection);
+            match game::handle_client_connect(lobby, addr, new_client.clone(), db_arc.clone()).await
+            {
+                Ok(client_hello) => {
+                    db.connections.insert(addr, new_connection);
 
-            game::handle_client_connect(lobby, addr, new_client, db_arc.clone()).await;
+                    if new_client.client_type == models::ClientType::PLAYER {
+                        let message = Message::Text(serde_json::to_string(&client_hello).unwrap());
 
-            tokio::spawn(client_handling::listen_for_messages(
-                read,
-                addr,
-                lobby_uuid,
-                db_arc.clone(),
-                server_arc.clone(),
-            ));
+                        tokio::spawn(client_handling::send_message_to_addr(
+                            addr,
+                            message,
+                            db_arc.clone(),
+                        ));
+                    }
+
+                    tokio::spawn(client_handling::listen_for_messages(
+                        read,
+                        addr,
+                        lobby_uuid,
+                        db_arc.clone(),
+                        server_arc.clone(),
+                    ));
+                }
+
+                Err(error_message) => close_connection(&mut new_connection, error_message).await,
+            };
         } else {
             let error_reason = format!(
                 "Lobby with id '{}' is not open for new connections",
                 lobby_id_str
             );
 
-            new_connection
-                .write_stream
-                .send(Message::Close(Some(CloseFrame {
-                    code: CloseCode::Normal,
-                    reason: Cow::Owned(error_reason),
-                })))
-                .await
-                .expect("Closing connection failed");
+            close_connection(&mut new_connection, error_reason).await;
         }
     }
+}
+
+async fn close_connection(connection: &mut Connection, error_reason: String) {
+    connection
+        .write_stream
+        .send(Message::Close(Some(CloseFrame {
+            code: CloseCode::Normal,
+            reason: Cow::Owned(error_reason),
+        })))
+        .await
+        .expect("Closing connection failed");
 }

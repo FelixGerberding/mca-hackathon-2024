@@ -118,7 +118,10 @@ async fn get_create_lobby_reply(
         id: lobby_id,
         clients: HashMap::new(),
         status: models::LobbyStatus::PENDING,
-        game_state: None,
+        game_state: models::GameState {
+            players: HashMap::new(),
+            entities: Vec::new(),
+        },
     };
 
     server.lobbies.insert(lobby_id, new_lobby);

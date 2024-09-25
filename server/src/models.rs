@@ -94,7 +94,7 @@ pub struct Lobby {
     pub clients: HashMap<SocketAddr, Client>,
     pub client_messages: HashMap<SocketAddr, ClientMessage>,
     pub status: LobbyStatus,
-    pub game_state: Option<GameState>,
+    pub game_state: GameState,
 }
 
 pub struct Server {

@@ -46,7 +46,7 @@ pub async fn listen_for_messages(
     let mut server = server_arc.lock().await;
     let lobby = server.lobbies.get_mut(&lobby_id).unwrap();
 
-    game::handle_client_disconnect(lobby, addr, db_arc.clone()).await;
+    game::handle_client_disconnect(lobby, addr, db_arc.clone());
 
     let mut db = db_arc.lock().await;
     db.connections.remove(&addr);
