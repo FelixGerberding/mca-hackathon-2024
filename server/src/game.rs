@@ -345,6 +345,12 @@ fn handle_client_message(
     player.error_message = "".to_string();
     player.last_action_success = true;
 
+    if player.health <= 0 {
+        player.last_action_success = false;
+        player.error_message = "Message was not processed, because player has no more health left".to_string();
+        return;
+    }
+
     match client_message.action {
         api_models::ClientAction::SHOOT => {
             let new_projectile = models::Projectile {
@@ -506,7 +512,7 @@ fn calculate_projectile_updates(game_state: &mut models::GameState) {
             if list_of_hit_coordinates.contains(&(player.x, player.y))
                 && projectile.source != addr.clone()
             {
-                player.health -= 20;
+                player.health = std::cmp::max(0, player.health - 20);
                 return;
             }
         });
