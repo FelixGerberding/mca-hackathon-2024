@@ -145,6 +145,7 @@ async fn get_lobbies_list_reply(
                 status: lobby.status,
                 id: lobby.id,
                 clients: lobby.clients.values().cloned().collect(),
+                spectators: lobby.clients.values().filter(|client| client.client_type == models::ClientType::SPECTATOR).count().try_into().unwrap()
             })
             .collect(),
     };

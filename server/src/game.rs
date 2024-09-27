@@ -207,10 +207,13 @@ fn push_game_state_to_address(
 }
 
 fn get_game_state_out(lobby: &mut models::Lobby) -> api_models::GameStateOut {
+    let spectator_count = lobby.clients.values().filter(|client| client.client_type == models::ClientType::SPECTATOR).count().try_into().unwrap();
+
     let game_state = lobby.game_state.clone();
     return api_models::GameStateOut {
         tick: lobby.tick,
         tick_length_milli_seconds: lobby.tick_length_milli_seconds,
+        spectators: spectator_count,
         entities: game_state.entities,
         players: transform_map_of_players_to_list_of_player(game_state.players),
     };

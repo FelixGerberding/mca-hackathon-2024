@@ -34,6 +34,7 @@ type GameState = {
   tick_length_milli_seconds: number;
   players: Player[];
   entities: Projectile[];
+  spectators: number;
 };
 
 const calculateTrajectoryEndpoint = (
@@ -128,6 +129,7 @@ export default function Game() {
   return (
     <div className="w-full max-w-6xl mx-auto p-4">
       <h2 className="text-2xl font-bold mb-4">Game Visualization</h2>
+      <p className="mb-4">Spectators: {gameState.spectators}</p>
       <div className="flex flex-col md:flex-row gap-4">
         <Card className="w-full md:w-1/2">
           <CardContent className="p-4">

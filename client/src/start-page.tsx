@@ -12,6 +12,7 @@ type Lobby = {
   name: string;
   status: "PENDING" | "RUNNING" | "FINISHED";
   clients: Client[];
+  spectators: number;
 };
 
 export default function StartPage() {
@@ -50,7 +51,7 @@ export default function StartPage() {
               key={lobby.id}
               className="flex justify-between items-center p-4 border rounded"
             >
-              <span>{lobby.id}</span>
+              <span>{lobby.id} (watched by {lobby.spectators})</span>
               {lobby.clients.length !== 0 &&
                 lobby.clients.map((player) => (
                   <span key={player.name} style={{ color: player.color }}>
