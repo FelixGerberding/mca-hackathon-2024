@@ -482,6 +482,23 @@ pub async fn check_all_clients_responded(
 }
 
 fn calculate_projectile_updates(game_state: &mut models::GameState) {
+
+    game_state.entities = game_state.entities.iter().cloned().filter(|projectile| {
+        if projectile.x < 0.0 {
+            return false;
+        }
+        if projectile.y < 0.0 {
+            return false;
+        }
+        if projectile.x > MAX_FIELD_SIZE_X.into() {
+            return false;
+        }
+        if projectile.y > MAX_FIELD_SIZE_Y.into() {
+            return false;
+        }
+        return true;
+    }).collect();
+
     game_state.entities.iter_mut().for_each(|projectile| {
         let list_of_hit_coordinates = get_fields_passed_by_projectile(projectile);
 
