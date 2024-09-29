@@ -93,14 +93,18 @@ fn update_initial_player_positions(lobby: &mut models::Lobby) -> Result<(), Stri
 async fn run_game_for_lobby(lobby_id: Uuid, server_arc: models::ServerArc, db_arc: models::DbArc) {
     info!("Starting game for lobby with id '{}'.", lobby_id);
 
-    let server = server_arc.lock().await;
+    let mut server = server_arc.lock().await;
 
-    tokio::spawn(ping_clients_in_lobby(
-        server.lobbies.get(&lobby_id).unwrap().tick,
+    let lobby = server.lobbies.get_mut(&lobby_id).unwrap();
+
+    ping_clients_in_lobby(
+        lobby.tick,
         lobby_id,
         server_arc.clone(),
         db_arc.clone(),
-    ));
+        lobby,
+    )
+    .await;
 }
 
 async fn ping_clients_in_lobby(
@@ -108,11 +112,10 @@ async fn ping_clients_in_lobby(
     lobby_id: Uuid,
     server_arc: models::ServerArc,
     db_arc: models::DbArc,
+    lobby: &mut models::Lobby,
 ) {
     info!("Running update of game state");
-    let mut server = server_arc.lock().await;
 
-    let lobby = server.lobbies.get_mut(&lobby_id).unwrap();
     if expected_tick != lobby.tick {
         info!(
             "Skipping scheduled update of clients for tick '{}'",
@@ -136,7 +139,12 @@ async fn ping_clients_in_lobby(
     ping_clients_with_new_tick(lobby, db_arc.clone());
 
     if lobby.status != models::LobbyStatus::FINISHED {
-        schedule_next_client_update(lobby.tick, lobby_id, server_arc.clone(), db_arc.clone()).await;
+        tokio::spawn(schedule_next_client_update(
+            lobby.tick,
+            lobby_id,
+            server_arc.clone(),
+            db_arc.clone(),
+        ));
     }
 }
 
@@ -207,7 +215,13 @@ fn push_game_state_to_address(
 }
 
 fn get_game_state_out(lobby: &mut models::Lobby) -> api_models::GameStateOut {
-    let spectator_count = lobby.clients.values().filter(|client| client.client_type == models::ClientType::SPECTATOR).count().try_into().unwrap();
+    let spectator_count = lobby
+        .clients
+        .values()
+        .filter(|client| client.client_type == models::ClientType::SPECTATOR)
+        .count()
+        .try_into()
+        .unwrap();
 
     let game_state = lobby.game_state.clone();
     return api_models::GameStateOut {
@@ -258,7 +272,18 @@ async fn run_deffered_client_update(
     db_arc: models::DbArc,
 ) {
     time::sleep(Duration::from_secs(2)).await;
-    ping_clients_in_lobby(expected_tick, lobby_id, server_arc.clone(), db_arc.clone()).await;
+
+    let mut server = server_arc.lock().await;
+    let lobby = server.lobbies.get_mut(&lobby_id).unwrap();
+
+    ping_clients_in_lobby(
+        expected_tick,
+        lobby_id,
+        server_arc.clone(),
+        db_arc.clone(),
+        lobby,
+    )
+    .await;
 }
 
 fn transform_map_of_players_to_list_of_player(
@@ -347,7 +372,8 @@ fn handle_client_message(
 
     if player.health <= 0 {
         player.last_action_success = false;
-        player.error_message = "Message was not processed, because player has no more health left".to_string();
+        player.error_message =
+            "Message was not processed, because player has no more health left".to_string();
         return;
     }
 
@@ -425,17 +451,13 @@ fn handle_client_message(
 }
 
 pub async fn check_all_clients_responded(
-    lobby_id: Uuid,
+    lobby: &mut models::Lobby,
     server_arc: models::ServerArc,
     db_arc: models::DbArc,
 ) {
     info!("Checking if all clients of lobby have responded");
-    let server = server_arc.lock().await;
 
-    let expected_client_addresses: HashSet<SocketAddr> = server
-        .lobbies
-        .get(&lobby_id)
-        .unwrap()
+    let expected_client_addresses: HashSet<SocketAddr> = lobby
         .clients
         .iter()
         .filter_map(|(addr, client)| {
@@ -448,19 +470,13 @@ pub async fn check_all_clients_responded(
         .cloned()
         .collect();
 
-    let clients_that_answered: HashSet<SocketAddr> = server
-        .lobbies
-        .get(&lobby_id)
-        .unwrap()
-        .client_messages
-        .keys()
-        .cloned()
-        .collect();
+    let clients_that_answered: HashSet<SocketAddr> =
+        lobby.client_messages.keys().cloned().collect();
 
     if clients_that_answered.is_superset(&expected_client_addresses) {
         let mut db = db_arc.lock().await;
 
-        let expected_tick = server.lobbies.get(&lobby_id).unwrap().tick;
+        let expected_tick = lobby.tick;
 
         info!(
             "Triggering premature lobby update, because all clients responded for tick '{}'",
@@ -478,32 +494,38 @@ pub async fn check_all_clients_responded(
             }
         };
 
-        tokio::spawn(ping_clients_in_lobby(
+        ping_clients_in_lobby(
             expected_tick,
-            lobby_id,
+            lobby.id,
             server_arc.clone(),
             db_arc.clone(),
-        ));
+            lobby,
+        )
+        .await;
     }
 }
 
 fn calculate_projectile_updates(game_state: &mut models::GameState) {
-
-    game_state.entities = game_state.entities.iter().cloned().filter(|projectile| {
-        if projectile.x < 0.0 {
-            return false;
-        }
-        if projectile.y < 0.0 {
-            return false;
-        }
-        if projectile.x > MAX_FIELD_SIZE_X.into() {
-            return false;
-        }
-        if projectile.y > MAX_FIELD_SIZE_Y.into() {
-            return false;
-        }
-        return true;
-    }).collect();
+    game_state.entities = game_state
+        .entities
+        .iter()
+        .cloned()
+        .filter(|projectile| {
+            if projectile.x < 0.0 {
+                return false;
+            }
+            if projectile.y < 0.0 {
+                return false;
+            }
+            if projectile.x > MAX_FIELD_SIZE_X.into() {
+                return false;
+            }
+            if projectile.y > MAX_FIELD_SIZE_Y.into() {
+                return false;
+            }
+            return true;
+        })
+        .collect();
 
     game_state.entities.iter_mut().for_each(|projectile| {
         let list_of_hit_coordinates = get_fields_passed_by_projectile(projectile);

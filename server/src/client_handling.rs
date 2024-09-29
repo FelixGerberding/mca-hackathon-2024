@@ -120,11 +120,11 @@ async fn process_message_of_client(
 
             lobby.client_messages.insert(addr, client_message);
 
-            tokio::spawn(game::check_all_clients_responded(
-                lobby_id,
+            game::check_all_clients_responded(
+                lobby,
                 server_arc.clone(),
-                db_arc.clone(),
-            ));
+                db_arc.clone()
+            ).await;
         }
     }
 }
