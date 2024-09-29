@@ -2,8 +2,8 @@
   "scripts": {
     "start:server:local": "cd server && RUST_LOG=info cargo run --profile dev",
     "start:app:local": "npm run dev --prefix client",
-    "start:example-client-node-js:local": "npm run start:local --prefix docs/example-clients/node-js",
-    "start:example-client-node-js:remote": "npm run start:remote --prefix docs/example-clients/node-js",
+    "start:example-client-node-js:local": "npm run start:local --prefix docs/example-clients/node-js/manual_control",
+    "start:example-client-node-js:remote": "npm run start:remote --prefix docs/example-clients/node-js/manual_control",
     "start:node-js-cirlce-walker:local": "npm run start:local --prefix docs/example-clients/node-js/circle_walker",
     "start:node-js-cirlce-walker:remote": "npm run start:remote --prefix docs/example-clients/node-js/circle_walker"
   }
