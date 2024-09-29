@@ -1,0 +1,15 @@
+{
+    "name": "node-js-cirlce-walker",
+    "version": "1.0.0",
+    "main": "index.js",
+    "scripts": {
+      "start": "node index.js",
+      "start:local": "npm run start -- ws://localhost:8080/lobby/9ec2a984-b5bf-4a13-89fd-53c0d9cafef6",
+      "start:remote": "npm run start -- wss://mca-websocket.felix.codes/lobby/9ec2a984-b5bf-4a13-89fd-53c0d9cafef6"
+    },
+    "license": "ISC",
+    "devDependencies": {
+      "websocket": "1.0.35"
+    }
+  }
+  
