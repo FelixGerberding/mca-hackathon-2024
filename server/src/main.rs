@@ -102,6 +102,7 @@ async fn listen_for_connections(
     server_arc: models::ServerArc,
 ) {
     while let Ok((stream, _)) = listener.accept().await {
+        info!("New connection incoming");
         let addr = stream
             .peer_addr()
             .expect("connected streams should have a peer address");
@@ -112,6 +113,16 @@ async fn listen_for_connections(
 
         let lines: Vec<String> = request_str.lines().map(|line| line.to_string()).collect();
         let request_line = lines.first().unwrap().to_string();
+
+        let ws_stream = tokio_tungstenite::accept_async(stream)
+            .await
+            .expect("Error during the websocket handshake occurred");
+
+        let (write, read) = ws_stream.split();
+
+        let mut new_connection = models::Connection {
+            write_stream: write,
+        };
 
         info!("New request: {}", request_line);
         let request_parts: Vec<&str> = request_line.split(" ").collect();
@@ -132,49 +143,111 @@ async fn listen_for_connections(
 
         info!("regex matches: {:?}", results);
 
-        let lobby_id_str = results
-            .get(0)
-            .expect("Could not get lobby id from request matches");
-        let lobby_uuid = Uuid::parse_str(lobby_id_str).unwrap();
-        let query_params =
-            querystring::querify(results.get(1).expect("Request is missing query parameters"))
-                .into_iter()
-                .collect::<HashMap<&str, &str>>();
+        let lobby_id_str_option = results.get(0);
 
-        let client_type_str = query_params
-            .get("clientType")
-            .expect("Missing client type from supplied query parameters");
+        if lobby_id_str_option.is_none() {
+            close_connection(
+                &mut new_connection,
+                "Could not find lobby id in path".to_string(),
+            )
+            .await;
+            continue;
+        }
 
-        let client_type = models::ClientType::from_str(&client_type_str).unwrap();
+        let lobby_id_str = lobby_id_str_option.unwrap();
+
+        let lobby_uuid_result = Uuid::parse_str(lobby_id_str);
+
+        if lobby_uuid_result.is_err() {
+            close_connection(
+                &mut new_connection,
+                format!("'{}' is not a valid UUID", lobby_id_str),
+            )
+            .await;
+            continue;
+        }
+
+        let lobby_uuid = lobby_uuid_result.unwrap();
+
+        let query_string_option = results.get(1);
+
+        if query_string_option.is_none() {
+            close_connection(
+                &mut new_connection,
+                "Missing query string in URL".to_string(),
+            )
+            .await;
+            continue;
+        }
+
+        let query_string = query_string_option.unwrap();
+
+        let query_params = querystring::querify(query_string)
+            .into_iter()
+            .collect::<HashMap<&str, &str>>();
+
+        let client_type_str_option = query_params.get("clientType");
+
+        if client_type_str_option.is_none() {
+            close_connection(
+                &mut new_connection,
+                "Missing 'clientType' parameter in supplied query parameters".to_string(),
+            )
+            .await;
+            continue;
+        }
+
+        let client_type_str = client_type_str_option.unwrap();
+
+        let client_type_result = models::ClientType::from_str(&client_type_str);
+        if client_type_result.is_err() {
+            close_connection(
+                &mut new_connection,
+                format!("{} is not a valid client type", client_type_str),
+            )
+            .await;
+            continue;
+        }
+
+        let client_type = client_type_result.unwrap();
+
         let username = query_params.get("username").unwrap_or(&"");
+
+        if client_type == models::ClientType::PLAYER && username.to_string() == "" {
+            close_connection(
+                &mut new_connection,
+                "Player clients must supply a 'username' via the query parameter".to_string(),
+            )
+            .await;
+            continue;
+        }
 
         info!(
             "Extract the following info from request. Lobby id: '{}', client type: {}, username: {}",
             lobby_uuid, client_type_str, username
         );
 
-        info!("Peer address: {}", addr);
-
-        let ws_stream = tokio_tungstenite::accept_async(stream)
-            .await
-            .expect("Error during the websocket handshake occurred");
-
         info!("New WebSocket connection: {}", addr);
-
-        let (write, read) = ws_stream.split();
 
         let new_client = models::Client {
             client_type: client_type,
             username: username.to_string(),
         };
 
-        let mut new_connection = models::Connection {
-            write_stream: write,
-        };
-
         let mut server = server_arc.lock().await;
 
-        let lobby = server.lobbies.get_mut(&lobby_uuid).unwrap();
+        let lobby_option = server.lobbies.get_mut(&lobby_uuid);
+
+        if lobby_option.is_none() {
+            close_connection(
+                &mut new_connection,
+                format!("Could not find lobby with id '{}'", lobby_uuid),
+            )
+            .await;
+            continue;
+        }
+
+        let lobby = lobby_option.unwrap();
 
         if matches!(new_client.client_type, models::ClientType::SPECTATOR)
             || (matches!(new_client.client_type, models::ClientType::PLAYER)
@@ -206,20 +279,28 @@ async fn listen_for_connections(
                     ));
                 }
 
-                Err(error_message) => close_connection(&mut new_connection, error_message).await,
+                Err(error_message) => {
+                    close_connection(&mut new_connection, error_message).await;
+                    continue;
+                }
             };
         } else {
-            let error_reason = format!(
-                "Lobby with id '{}' is not open for new connections",
-                lobby_id_str
-            );
-
-            close_connection(&mut new_connection, error_reason).await;
+            close_connection(
+                &mut new_connection,
+                format!(
+                    "Lobby with id '{}' is not open for new connections",
+                    lobby_id_str
+                ),
+            )
+            .await;
+            continue;
         }
     }
 }
 
 async fn close_connection(connection: &mut Connection, error_reason: String) {
+    info!("Declining connection, due to error: {}", error_reason);
+
     connection
         .write_stream
         .send(Message::Close(Some(CloseFrame {
@@ -228,4 +309,6 @@ async fn close_connection(connection: &mut Connection, error_reason: String) {
         })))
         .await
         .expect("Closing connection failed");
+
+    info!("Connection closed");
 }
