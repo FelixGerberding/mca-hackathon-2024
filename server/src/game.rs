@@ -22,6 +22,7 @@ const PROJECTILE_UNIT_LENGTH_TRAVEL_DISTANCE: f64 = 6.0;
 lazy_static! {
     static ref PLAYER_COUNT_TO_POSITIONS: HashMap<usize, Vec<(i32, i32)>> = {
         let mut m = HashMap::new();
+        m.insert(0, vec![]);
         m.insert(1, vec![(14, 14)]);
         m.insert(2, vec![(5, 14), (24, 14)]);
         m.insert(3, vec![(5, 5), (24, 5), (14, 24)]);
@@ -59,11 +60,20 @@ pub async fn start_game_for_lobby(
     lobby.client_messages = HashMap::new();
     lobby.round = 0;
 
+    let _ = update_initial_player_positions(lobby);
+    reset_player_health(lobby);
+
     tokio::spawn(run_game_for_lobby(
         lobby_id,
         server_arc.clone(),
         db_arc.clone(),
     ));
+}
+
+fn reset_player_health(lobby: &mut models::Lobby) {
+    lobby.game_state.players.values_mut().for_each(|player| {
+        player.health = 100;
+    });
 }
 
 fn update_initial_player_positions(lobby: &mut models::Lobby) -> Result<(), String> {
@@ -125,6 +135,11 @@ async fn ping_clients_in_lobby(
         return;
     }
 
+    if lobby.status != models::LobbyStatus::RUNNING {
+        info!("Skipping game update, because lobby is no longer running");
+        return;
+    }
+
     let game_state = &mut lobby.game_state;
 
     lobby
@@ -138,7 +153,7 @@ async fn ping_clients_in_lobby(
 
     ping_clients_with_new_tick(lobby, db_arc.clone());
 
-    if lobby.status != models::LobbyStatus::FINISHED {
+    if lobby.status == models::LobbyStatus::RUNNING {
         tokio::spawn(schedule_next_client_update(
             lobby.tick,
             lobby_id,

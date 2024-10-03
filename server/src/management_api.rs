@@ -1,3 +1,4 @@
+use log::info;
 use uuid::Uuid;
 use warp::http::StatusCode;
 
@@ -76,14 +77,14 @@ async fn get_update_lobby_reply(
 
     match server.lobbies.get_mut(&lobby_id) {
         Some(lobby) => {
-            if matches!(lobby.status, models::LobbyStatus::RUNNING) {
+            if lobby.status == update_lobby_body.status {
                 return Ok(warp::reply::with_status(
-                    "Lobby status cannot be updated while lobby is running".to_string(),
+                    "Lobby is already in desired state".to_string(),
                     StatusCode::UNPROCESSABLE_ENTITY,
                 ));
             }
 
-            if matches!(update_lobby_body.status, models::LobbyStatus::RUNNING) {
+            if update_lobby_body.status == models::LobbyStatus::RUNNING {
                 tokio::spawn(game::start_game_for_lobby(
                     lobby_id,
                     server_arc.clone(),
@@ -92,6 +93,11 @@ async fn get_update_lobby_reply(
             }
 
             lobby.status = update_lobby_body.status.clone();
+
+            info!(
+                "Lobby with id '{}' was set to status '{:?}'",
+                lobby_id, update_lobby_body.status
+            );
             return Ok(warp::reply::with_status("".to_string(), StatusCode::OK));
         }
         None => {
@@ -145,7 +151,13 @@ async fn get_lobbies_list_reply(
                 status: lobby.status,
                 id: lobby.id,
                 clients: lobby.clients.values().cloned().collect(),
-                spectators: lobby.clients.values().filter(|client| client.client_type == models::ClientType::SPECTATOR).count().try_into().unwrap()
+                spectators: lobby
+                    .clients
+                    .values()
+                    .filter(|client| client.client_type == models::ClientType::SPECTATOR)
+                    .count()
+                    .try_into()
+                    .unwrap(),
             })
             .collect(),
     };
