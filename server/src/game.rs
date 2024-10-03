@@ -90,6 +90,8 @@ pub async fn start_game_for_lobby(
     lobby.client_messages = HashMap::new();
     lobby.round = 0;
 
+    lobby.game_state.entities = vec![];
+
     let _ = update_initial_player_positions(lobby);
     reset_player_health(lobby);
 
