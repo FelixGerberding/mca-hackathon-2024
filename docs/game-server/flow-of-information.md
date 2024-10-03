@@ -4,7 +4,7 @@ This document is meant to the describe the flow of information and processing ac
 
 ## Actors
 
-We will distinguishe three types of actors:
+We will distinguish between three types of actors:
 
 1. Server
 1. Player client
@@ -24,7 +24,7 @@ The player client is responsible to process the game state and return an action 
 ### Visualization Client
 
 The visualization client will also connect to the server and join a lobby.
-The visualuzation client will play no role in updating the game state and can be imagined as a passive spectator.
+The visualization client will play no role in updating the game state and can be imagined as a passive spectator.
 The server will nonetheless share game state updates with the visualization client.
 The game state will then be used to render a graphical representation of the entities positions, actions, etc.
 
