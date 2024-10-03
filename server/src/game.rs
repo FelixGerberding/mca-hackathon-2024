@@ -389,6 +389,10 @@ pub fn handle_client_disconnect(
     if client_type == models::ClientType::PLAYER {
         lobby.game_state.players.remove(&addr);
 
+        if lobby.status == models::LobbyStatus::PENDING {
+            let _ = update_initial_player_positions(lobby);
+        }
+
         ping_clients_with_new_tick(lobby, db_arc.clone());
     } else {
         push_game_state_to_spectators(lobby, db_arc.clone());
