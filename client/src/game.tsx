@@ -41,7 +41,7 @@ const calculateTrajectoryEndpoint = (
   x: number,
   y: number,
   rotation: number,
-  length: number
+  length: number,
 ) => {
   const radians = ((90 - rotation) * Math.PI) / 180;
   const endX = x + length * Math.cos(radians);
@@ -60,7 +60,7 @@ export default function Game() {
     wsRef.current = new WebSocket(
       `${
         import.meta.env.VITE_REMOTE_SOCKET
-      }/lobby/${lobbyId}?clientType=SPECTATOR&username=SpectatorUI`
+      }/lobby/${lobbyId}?clientType=SPECTATOR&username=SpectatorUI`,
     );
 
     return () => {
@@ -120,7 +120,7 @@ export default function Game() {
           y2={300 - i * 10}
           stroke="rgba(0,0,0,0.2)"
           strokeWidth="0.5"
-        />
+        />,
       );
     }
     return gridLines;
@@ -172,7 +172,7 @@ export default function Game() {
                         y: 300 - entity.y * 10 - 5, // Invert Y axis
                       }}
                       exit={{ opacity: 0 }}
-                      transition={{ type: "spring", stiffness: 100 }}
+                      transition={{ type: "tween", duration: 0.05 }}
                     >
                       <line
                         x1="0"
@@ -201,14 +201,14 @@ export default function Game() {
                       entity.x,
                       entity.y,
                       entity.direction,
-                      entity.travel_distance
+                      entity.travel_distance,
                     );
 
                   const { endX, endY } = calculateTrajectoryEndpoint(
                     nextTurnX,
                     nextTurnY,
                     entity.direction,
-                    100
+                    100,
                   );
 
                   return (
@@ -256,7 +256,7 @@ export default function Game() {
                           rotate: entity.direction - 90, // to offset default svg rotation
                         }}
                         exit={{ opacity: 0 }}
-                        transition={{ type: "spring", stiffness: 200 }}
+                        transition={{ type: "tween", duration: 0.05 }}
                       />
                     </motion.g>
                   );
