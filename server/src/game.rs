@@ -65,6 +65,17 @@ lazy_static! {
         );
         m
     };
+    static ref PLAYER_COUNT_TO_COLOR: HashMap<usize, String> = {
+        let mut m = HashMap::new();
+        m.insert(1, "#FF0000".to_string());
+        m.insert(2, "#00FF00".to_string());
+        m.insert(3, "#0000FF".to_string());
+        m.insert(4, "#C800FF".to_string());
+        m.insert(5, "#00FFE1".to_string());
+        m.insert(6, "#FF9D00".to_string());
+        m.insert(7, "#0F754C".to_string());
+        m
+    };
 }
 
 pub async fn start_game_for_lobby(
@@ -352,6 +363,15 @@ pub async fn handle_client_connect(
 
     if new_client.client_type == models::ClientType::PLAYER {
         let player_id = Uuid::new_v4();
+        let player_count = lobby.game_state.players.values().count();
+        let color = PLAYER_COUNT_TO_COLOR.get(&(player_count + 1));
+
+        if color.is_none() {
+            return Err(format!(
+                "Could not get color for new player. Lobby already has {} players.",
+                player_count
+            ));
+        };
 
         let new_player = models::Player {
             entity_type: models::EntityType::PLAYER,
@@ -360,7 +380,7 @@ pub async fn handle_client_connect(
             x: 0,
             y: 0,
             rotation: 100,
-            color: "#FF00FF".to_string(),
+            color: color.unwrap().to_string(),
             health: 100,
             last_action_success: true,
             error_message: "".to_string(),
