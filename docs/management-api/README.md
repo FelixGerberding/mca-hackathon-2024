@@ -2,16 +2,24 @@
 
 This document provides an overview of the Management API, including descriptions and usage examples for each endpoint. The Management API allows you to manage lobbies, including creating, retrieving, updating, and managing the status of lobbies.
 
-## Base URL
+## Variables
 
-All API requests should be made to the base URL:
+Variables are referred to using the `{{variable_name}}` notation.
 
-`localhost:8081` for local development
-`https://mca-client.felix.codes` for production
+_Variables used below:_
+
+- Lobby ID
+  - **Key:** `lobby_id`
+  - **Value:** The unique identifier for a lobby (to be provided by the user when performing operations on specific lobbies).
+- Base URL
+  - **Key:** `url`
+  - **Value:** Base URL to connect to the API.
+    - `http://localhost:8081` for local development
+    - `https://mca-client.felix.codes` for production
 
 ## Authentication
 
-Authentication is not required for the Management API.
+No authentication is required for the management API.
 
 ## Endpoints
 
@@ -20,9 +28,10 @@ Authentication is not required for the Management API.
 **Endpoint:** `POST /lobbies`
 
 This endpoint is used to create a new lobby. No parameters are required in the request body.
-After creation, the lobby will be in the "PENDING" status and can get connections but no actions.
+After creation, the lobby will be in the "PENDING" status.
+Players can connect to the lobby, but the server will post no regular game updates yet.
 
-**Request Example:**
+_Request Example:_
 
 ```json
 POST {{url}}/lobbies
@@ -32,9 +41,11 @@ POST {{url}}/lobbies
 
 **Endpoint:** `GET /lobbies`
 
-This endpoint retrieves a list of all lobbies. No parameters are required in the request. This is used for displaying a list of available lobbies to the user.
+This endpoint retrieves a list of all lobbies.
+No parameters are required in the request.
+This is used for displaying a list of available lobbies to the user.
 
-**Request Example:**
+_Request Example:_
 
 ```json
 GET {{url}}/lobbies
@@ -47,7 +58,7 @@ GET {{url}}/lobbies
 This endpoint updates the status of a lobby to "PENDING," indicating that the lobby is open and awaiting participants.
 This is used when the lobby is closed and needs to be reopened.
 
-**Request Example:**
+_Request Example:_
 
 ```json
 PATCH {{url}}/lobbies/{{lobby_id}}
@@ -65,7 +76,7 @@ Content-Type: application/json
 This endpoint updates the status of a lobby to "RUNNING," indicating that the lobby has started.
 As soon as the lobby is running, clients need to submit their actions to the server.
 
-**Request Example:**
+_Request Example:_
 
 ```json
 PATCH {{url}}/lobbies/{{lobby_id}}
@@ -82,7 +93,7 @@ Content-Type: application/json
 
 This endpoint updates the status of a lobby to "FINISHED," indicating that the lobby has ended.
 
-**Request Example:**
+_Request Example:_
 
 ```json
 PATCH {{url}}/lobbies/{{lobby_id}}
@@ -92,12 +103,3 @@ Content-Type: application/json
   "status": "FINISHED"
 }
 ```
-
-## Variables
-
-### Lobby ID
-
-- **Key:** `lobby_id`
-- **Value:** The unique identifier for a lobby (to be provided by the user when performing operations on specific lobbies).
-
----

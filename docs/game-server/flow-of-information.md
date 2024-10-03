@@ -36,7 +36,7 @@ All information exchange will use a common JSON schema.
 
 ## Messages
 
-> **Note** As a starting point to establish the interface for communicaiton, we will focus on player connection and movement
+This section is concerned about which messages are exchanged between clients and server.
 
 ### Client Connection
 
@@ -51,47 +51,119 @@ The following schema is to be used.
 
 `ws://<gamehost>/{lobby}?clientType=<PLAYER|SPECTATOR>&username=<string>`
 
-### Game Update
+After successful connection, the server will send a "client hello" to let the player that his connection was established.
+The mesasge will also contain the player's UUID, which will be used during game state updates (see [Game Update section](#game-update)).
+If connection is not possible, the server will close the web socket connection and provide a reason in the socket's close message.
 
-A game update of the server will look like the following (for now).
-The `tick` id is used to clearly identify a turn and map it back the player responses.
+_Example for successful connection:_
 
 ```json
 {
-  "tick": "<UUID>",
-  "entities": [
-    {
-      "entityType": "PLAYER",
-      "id": "<UUID>",
-      "name": "<string>",
-      "x": "<int>",
-      "y": "<int>",
-      "rotation": "<int>",
-      "color": "<hex",
-      "health": "<int>",
-      "lastActionSuccess": "<boolean>",
-      "errorMessage": "<string>"
-    },
-    ...
-  ]
+  "success": true,
+  "message": "Connection successful.",
+  "player_id": "113b09b7-6b8e-48b5-8e20-84ce16ae7901"
 }
 ```
 
-### Player Action
+### Game Update
+
+A game update of the server will look like the following.
+The `tick` id is used to clearly identify a turn and map it back to the player responses.
+
+_Example game state update:_
+
+```json
+{
+  "tick": "0fb3b3d2-fc1d-40dc-a2cf-24baaef6ddb1",
+  "tick_length_milli_seconds": 2000,
+  "players": [
+    {
+      "entity_type": "PLAYER",
+      "id": "113b09b7-6b8e-48b5-8e20-84ce16ae7901",
+      "name": "node-js-example-client",
+      "x": 14,
+      "y": 14,
+      "rotation": 0,
+      "color": "#FF0000",
+      "health": 100,
+      "last_action_success": true,
+      "error_message": ""
+    }
+  ],
+  "entities": [
+    {
+      "id": "aafc1830-af30-4580-ba34-285daab262c7",
+      "previous_x": 14,
+      "previous_y": 20,
+      "x": 14,
+      "y": 26,
+      "travel_distance": 6,
+      "direction": 0
+    }
+  ],
+  "spectators": 1
+}
+```
+
+`players` lists all players, their current position, rotation and health.
+Furhtermore, it is indicated whether a player's last action was successful or not.
+More details can be found in the [Error Handling section](#error-handling).
+
+`entities` lists all projectiles. The information includes their previous position, current position, the direction and how many units they will travel into their current direction during the next turn.
+
+### Player Actions
+
+#### Submitting Actions
 
 Per turn a player can select from one of the following actions:
 
-- TURN (0 - 360°)
-- MOVE UP (1 square)
-- MOVE DOWN (1 square)
-- MOVE LEFT (1 square)
-- MOVE RIGHT (1 square)
+- `TURN` (0 - 360°)
+  - additional parameter: `degrees` (new direction the player should look at)
+- `SHOOT`
+- `TURN`
+- `UP`
+- `DOWN`
+- `LEFT`
+- `RIGHT`
 
 The value of `tick` should match the id returned as part of the prior game update.
 
+_Example to shoot:_
+
 ```json
 {
-  "tick": "<UUID>",
-  "action": "<string>"
+  "tick": "a3d1dbfc-a490-4cbd-bb42-d33a4d80e94a",
+  "action": "SHOOT"
 }
 ```
+
+_Example to move upwards:_
+
+```json
+{
+  "tick": "a3d1dbfc-a490-4cbd-bb42-d33a4d80e94a",
+  "action": "UP"
+}
+```
+
+_Example to turn the player towards 273°:_
+
+```json
+{
+  "tick": "a3d1dbfc-a490-4cbd-bb42-d33a4d80e94a",
+  "action": "TURN",
+  "degrees": "273"
+}
+```
+
+#### Error Handling
+
+The server may deny a player's action, due to a multitude of reasons.
+For example:
+
+- Missing parameters (think about the `degrees` from above)
+- Moving into the questioned direction is not allowed (the player is already at the edge of the playing field)
+- The client used an outdated `tick`
+
+If the last player action was denied, the server will indicate this by setting the `last_action_success` parameter for that player to `false`.
+The `error_message` parameter will contain the reason why the message was denied.
