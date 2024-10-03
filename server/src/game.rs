@@ -199,6 +199,21 @@ fn ping_clients_with_new_tick(lobby: &mut models::Lobby, db_arc: models::DbArc) 
     lobby.client_messages = HashMap::new();
 
     push_game_state_to_everyone(lobby, db_arc.clone());
+
+    if get_amount_of_players_alive(lobby) <= 1 {
+        info!("1 or less players alive, stopping lobby");
+        lobby.status = models::LobbyStatus::FINISHED;
+        return;
+    }
+}
+
+fn get_amount_of_players_alive(lobby: &mut models::Lobby) -> usize {
+    return lobby
+        .game_state
+        .players
+        .values()
+        .filter(|player| player.health > 0)
+        .count();
 }
 
 fn push_game_state_to_everyone(lobby: &mut models::Lobby, db_arc: models::DbArc) {
