@@ -2,7 +2,7 @@
 
 ## Idea
 
-This project was used as part of a 2 day hackathon in a small friend group.
+This project was developed to be used during a 2 day hackathon in a small friend group.
 It implements a small websocket-based game.
 Idea is that each attendee implements their own bot contesting in various tournament rounds throughout the hackathon.
 
