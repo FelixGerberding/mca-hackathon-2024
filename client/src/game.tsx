@@ -52,8 +52,8 @@ const calculateTrajectoryEndpoint = (
 export default function Game() {
   const { lobbyId } = useParams();
   const [gameState, setGameState] = useState<GameState | null>(null);
-  const [showGrid, setShowGrid] = useState(false);
-  const [showTrajectory, setShowTrajectory] = useState(false);
+  const [showGrid, setShowGrid] = useState(true);
+  const [showTrajectory, setShowTrajectory] = useState(true);
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
