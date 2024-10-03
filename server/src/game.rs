@@ -20,28 +20,47 @@ const MAX_ROUNDS: i32 = 500;
 const PROJECTILE_UNIT_LENGTH_TRAVEL_DISTANCE: f64 = 6.0;
 
 lazy_static! {
-    static ref PLAYER_COUNT_TO_POSITIONS: HashMap<usize, Vec<(i32, i32)>> = {
+    static ref PLAYER_COUNT_TO_POSITIONS: HashMap<usize, Vec<(i32, i32, i32)>> = {
         let mut m = HashMap::new();
         m.insert(0, vec![]);
-        m.insert(1, vec![(14, 14)]);
-        m.insert(2, vec![(5, 14), (24, 14)]);
-        m.insert(3, vec![(5, 5), (24, 5), (14, 24)]);
-        m.insert(4, vec![(5, 5), (24, 5), (5, 24), (24, 24)]);
-        m.insert(5, vec![(5, 5), (24, 5), (5, 24), (24, 24), (14, 14)]);
+        m.insert(1, vec![(14, 14, 0)]);
+        m.insert(2, vec![(5, 14, 270), (24, 14, 90)]);
+        m.insert(3, vec![(5, 5, 270), (24, 5, 90), (14, 24, 0)]);
+        m.insert(
+            4,
+            vec![(5, 5, 270), (24, 5, 90), (5, 24, 270), (24, 24, 90)],
+        );
+        m.insert(
+            5,
+            vec![
+                (5, 5, 270),
+                (24, 5, 90),
+                (5, 24, 270),
+                (24, 24, 90),
+                (14, 14, 0),
+            ],
+        );
         m.insert(
             6,
-            vec![(5, 5), (5, 14), (5, 24), (24, 5), (24, 14), (24, 24)],
+            vec![
+                (5, 5, 270),
+                (5, 14, 270),
+                (5, 24, 270),
+                (24, 5, 90),
+                (24, 14, 90),
+                (24, 24, 90),
+            ],
         );
         m.insert(
             7,
             vec![
-                (5, 5),
-                (5, 14),
-                (5, 24),
-                (24, 5),
-                (24, 14),
-                (24, 24),
-                (14, 14),
+                (5, 5, 270),
+                (5, 14, 270),
+                (5, 24, 270),
+                (24, 5, 90),
+                (24, 14, 90),
+                (24, 24, 90),
+                (14, 14, 0),
             ],
         );
         m
@@ -95,6 +114,7 @@ fn update_initial_player_positions(lobby: &mut models::Lobby) -> Result<(), Stri
         .for_each(|(index, player)| {
             player.x = starting_positions[index].0;
             player.y = starting_positions[index].1;
+            player.rotation = starting_positions[index].2;
         });
 
     return Ok(());
