@@ -33,7 +33,7 @@ Players can connect to the lobby, but the server will post no regular game updat
 
 _Request Example:_
 
-```json
+```
 POST {{url}}/lobbies
 ```
 
@@ -47,7 +47,7 @@ This is used for displaying a list of available lobbies to the user.
 
 _Request Example:_
 
-```json
+```
 GET {{url}}/lobbies
 ```
 
@@ -60,7 +60,7 @@ This is used when the lobby is closed and needs to be reopened.
 
 _Request Example:_
 
-```json
+```
 PATCH {{url}}/lobbies/{{lobby_id}}
 Content-Type: application/json
 
@@ -78,7 +78,7 @@ As soon as the lobby is running, clients need to submit their actions to the ser
 
 _Request Example:_
 
-```json
+```
 PATCH {{url}}/lobbies/{{lobby_id}}
 Content-Type: application/json
 
@@ -95,7 +95,7 @@ This endpoint updates the status of a lobby to "FINISHED," indicating that the l
 
 _Request Example:_
 
-```json
+```
 PATCH {{url}}/lobbies/{{lobby_id}}
 Content-Type: application/json
 
