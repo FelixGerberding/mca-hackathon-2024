@@ -1,6 +1,11 @@
 # Management API Documentation
 
-This document provides an overview of the Management API, including descriptions and usage examples for each endpoint. The Management API allows you to manage lobbies, including creating, retrieving, updating, and managing the status of lobbies.
+This document provides an overview of the Management API, including descriptions and usage examples for each endpoint.
+The Management API allows you to manage lobbies, including creating, retrieving, updating, and managing the status of lobbies.
+
+Checkout the [OpenAPI document](management_api.yaml) for more details about the structure and used schemas.
+
+A [Bruno collection](./bruno/Management%20API/) is provided to easily manage the local and remote setup.
 
 ## Variables
 
