@@ -4,8 +4,8 @@
     "start:app:local": "npm run dev --prefix client",
     "start:example-client-node-js:local": "npm run start:local --prefix docs/example-clients/node-js/manual_control",
     "start:example-client-node-js:remote": "npm run start:remote --prefix docs/example-clients/node-js/manual_control",
-    "start:node-js-cirlce-walker:local": "npm run start:local --prefix docs/example-clients/node-js/circle_walker",
-    "start:node-js-cirlce-walker:remote": "npm run start:remote --prefix docs/example-clients/node-js/circle_walker",
+    "start:node-js-circle-walker:local": "npm run start:local --prefix docs/example-clients/node-js/circle_walker",
+    "start:node-js-circle-walker:remote": "npm run start:remote --prefix docs/example-clients/node-js/circle_walker",
     "start:elixir-circle-walker:remote": "cd docs/example-clients/elixir/circle_walker && mix run --no-halt websocket_client.ex wss://mca-websocket.felix.codes/lobby/9ec2a984-b5bf-4a13-89fd-53c0d9cafef6",
     "start:python-circle-walker:remote": "cd docs/example-clients/python/circle_walker && python3 index.py wss://mca-websocket.felix.codes/lobby/9ec2a984-b5bf-4a13-89fd-53c0d9cafef6"
   }
