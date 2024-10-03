@@ -23,7 +23,7 @@ export default function StartPage() {
     const fetchLobbies = async () => {
       try {
         const response = await fetch(
-          `${import.meta.env.VITE_REMOTE_API}/lobbies`
+          `${import.meta.env.VITE_REMOTE_API}/lobbies`,
         );
         const data = await response.json();
         setLobbies(data.lobbies);
@@ -51,7 +51,9 @@ export default function StartPage() {
               key={lobby.id}
               className="flex justify-between items-center p-4 border rounded"
             >
-              <span>{lobby.id} (watched by {lobby.spectators})</span>
+              <span>
+                {lobby.id} (watched by {lobby.spectators})
+              </span>
               {lobby.clients.length !== 0 &&
                 lobby.clients.map((player) => (
                   <span key={player.name} style={{ color: player.color }}>
@@ -60,7 +62,6 @@ export default function StartPage() {
                 ))}
               <button
                 className="bg-blue-500 text-white px-4 py-2 rounded"
-                disabled={lobby.status !== "PENDING"}
                 onClick={() => handleJoinLobby(lobby.id)}
               >
                 Join
