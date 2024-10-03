@@ -29,7 +29,7 @@ defmodule WebSocketClient do
 
     payload = Enum.at(@fixed_payloads, rem(state.counter, length(@fixed_payloads)))
     message = Map.put(payload, :tick, parsed_message["tick"])
-
+    
     IO.puts("Sending message #{inspect(message)}")
     {:reply, {:text, Jason.encode!(message)}, %{state | counter: state.counter + 1}}
   end
@@ -45,10 +45,19 @@ defmodule WebSocketClient do
 end
 
 defmodule Main do
-  def main do
-    base_address = System.get_env("BASE_ADDRESS")
+  def main(args) do
+    case args do
+      [base_address | _] ->
+        run_client(base_address)
+      [] ->
+        IO.puts(:stderr, "Error: Base address not provided")
+        IO.puts(:stderr, "Usage: elixir websocket_client.exs <base_address>")
+        System.halt(1)
+    end
+  end
 
-    if is_nil(base_address) or base_address == "" do
+  defp run_client(base_address) do
+    if base_address == "" do
       IO.puts(:stderr, "Cannot connect to '#{base_address}'")
       System.halt(1)
     end
@@ -56,11 +65,21 @@ defmodule Main do
     address = "#{base_address}?clientType=PLAYER&username=elixir-example-client"
     IO.puts("Starting client. Connecting to #{address}")
 
-    {:ok, _pid} = WebSocketClient.start_link(address)
-
-    # Keep the process alive
-    Process.sleep(:infinity)
+    case WebSocketClient.start_link(address) do
+      {:ok, _pid} ->
+        IO.puts("Connection established successfully.")
+        # Keep the process alive
+        Process.sleep(:infinity)
+      {:error, %WebSockex.RequestError{code: code, message: message}} ->
+        IO.puts(:stderr, "Failed to connect: HTTP #{code} - #{message}")
+        IO.puts(:stderr, "Please check the server address and your network connection.")
+        System.halt(1)
+      {:error, reason} ->
+        IO.puts(:stderr, "Failed to connect: #{inspect(reason)}")
+        IO.puts(:stderr, "Please check your configuration and try again.")
+        System.halt(1)
+    end
   end
 end
 
-Main.main()
+Main.main(System.argv())
