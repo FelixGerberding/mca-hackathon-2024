@@ -18,7 +18,7 @@ const MAX_FIELD_SIZE_X: i32 = 30;
 const MAX_FIELD_SIZE_Y: i32 = 30;
 const MAX_ROUNDS: i32 = 5000;
 const PROJECTILE_UNIT_LENGTH_TRAVEL_DISTANCE: f64 = 6.0;
-const MAXIMAL_ROUND_LENGTH_MILLIS: u64 = 500;
+pub const GAME_TICK_LENGTH: u64 = 500;
 
 lazy_static! {
     static ref PLAYER_COUNT_TO_POSITIONS: HashMap<usize, Vec<(i32, i32, i32)>> = {
@@ -339,7 +339,7 @@ async fn run_deffered_client_update(
     server_arc: models::ServerArc,
     db_arc: models::DbArc,
 ) {
-    time::sleep(Duration::from_millis(MAXIMAL_ROUND_LENGTH_MILLIS)).await;
+    time::sleep(Duration::from_millis(GAME_TICK_LENGTH)).await;
 
     let mut server = server_arc.lock().await;
     let lobby = server.lobbies.get_mut(&lobby_id).unwrap();

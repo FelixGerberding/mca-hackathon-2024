@@ -13,7 +13,7 @@ pub struct LobbyOut {
     pub id: Uuid,
     pub clients: Vec<models::Client>,
     pub status: models::LobbyStatus,
-    pub spectators: i32
+    pub spectators: i32,
 }
 
 #[derive(Serialize)]
@@ -29,10 +29,10 @@ pub struct UpdateLobbyBody {
 #[derive(Serialize)]
 pub struct GameStateOut {
     pub tick: Uuid,
-    pub tick_length_milli_seconds: i32,
+    pub tick_length_milli_seconds: u64,
     pub players: Vec<models::Player>,
     pub entities: Vec<models::Projectile>,
-    pub spectators: i32
+    pub spectators: i32,
 }
 
 #[derive(Serialize)]

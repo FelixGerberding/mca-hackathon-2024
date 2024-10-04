@@ -14,8 +14,6 @@ use tokio_tungstenite::tungstenite::Message;
 
 use crate::api_models::ClientMessage;
 
-pub const TICK_LENGTH_MILLI_SECONDS: i32 = 2000;
-
 #[derive(Debug, Serialize, Clone, PartialEq)]
 pub enum ClientType {
     PLAYER,
@@ -89,7 +87,7 @@ pub struct Client {
 pub struct Lobby {
     pub round: i32,
     pub tick: Uuid,
-    pub tick_length_milli_seconds: i32,
+    pub tick_length_milli_seconds: u64,
     pub id: Uuid,
     pub clients: HashMap<SocketAddr, Client>,
     pub client_messages: HashMap<SocketAddr, ClientMessage>,
