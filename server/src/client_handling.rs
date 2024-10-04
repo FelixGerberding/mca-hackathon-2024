@@ -79,7 +79,13 @@ async fn process_message_of_client(
         return;
     }
 
-    let client = lobby.clients.get(&addr).unwrap();
+    let client_option = lobby.clients.get(&addr);
+
+    if client_option.is_none() {
+        return;
+    }
+
+    let client = client_option.unwrap();
 
     if !matches!(client.client_type, models::ClientType::PLAYER,) {
         info!(
@@ -120,11 +126,7 @@ async fn process_message_of_client(
 
             lobby.client_messages.insert(addr, client_message);
 
-            game::check_all_clients_responded(
-                lobby,
-                server_arc.clone(),
-                db_arc.clone()
-            ).await;
+            game::check_all_clients_responded(lobby, server_arc.clone(), db_arc.clone()).await;
         }
     }
 }
