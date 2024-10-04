@@ -114,9 +114,13 @@ async fn listen_for_connections(
         let lines: Vec<String> = request_str.lines().map(|line| line.to_string()).collect();
         let request_line = lines.first().unwrap().to_string();
 
-        let ws_stream = tokio_tungstenite::accept_async(stream)
-            .await
-            .expect("Error during the websocket handshake occurred");
+        let ws_stream_result = tokio_tungstenite::accept_async(stream).await;
+
+        if ws_stream_result.is_err() {
+            continue;
+        }
+
+        let ws_stream = ws_stream_result.unwrap();
 
         let (write, read) = ws_stream.split();
 
