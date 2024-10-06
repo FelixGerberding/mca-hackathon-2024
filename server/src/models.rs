@@ -54,7 +54,7 @@ pub struct Projectile {
     pub travel_distance: f64,
     pub direction: i32,
     #[serde(skip)]
-    pub source: SocketAddr,
+    pub source: Uuid,
 }
 
 #[derive(Serialize, Clone)]
@@ -66,6 +66,7 @@ pub struct Player {
     pub y: i32,
     pub rotation: i32,
     pub color: String,
+    pub damage_inflicted_by: Vec<Uuid>,
     pub health: i16,
     pub last_action_success: bool,
     pub error_message: String,

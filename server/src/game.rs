@@ -5,6 +5,7 @@ use std::collections::HashSet;
 use std::f64::consts::PI;
 use std::net::SocketAddr;
 use std::time::Duration;
+use std::vec;
 use tokio::task::JoinHandle;
 use tokio::time;
 use uuid::Uuid;
@@ -182,6 +183,11 @@ async fn ping_clients_in_lobby(
         .for_each(|(addr, client_message)| {
             handle_client_message(client_message.clone(), addr, game_state);
         });
+
+    game_state
+        .players
+        .values_mut()
+        .for_each(|player| player.damage_inflicted_by = vec![]);
 
     calculate_projectile_updates(game_state);
 
@@ -382,6 +388,7 @@ pub async fn handle_client_connect(
 
         let new_player = models::Player {
             entity_type: models::EntityType::PLAYER,
+            damage_inflicted_by: vec![],
             id: player_id,
             name: new_client.username.clone(),
             x: 0,
@@ -468,7 +475,7 @@ fn handle_client_message(
                 x: player.x.into(),
                 y: player.y.into(),
                 direction: player.rotation,
-                source: addr.clone(),
+                source: player.id,
             };
 
             game_state.entities.push(new_projectile);
@@ -611,11 +618,13 @@ fn calculate_projectile_updates(game_state: &mut models::GameState) {
     game_state.entities.iter_mut().for_each(|projectile| {
         let list_of_hit_coordinates = get_fields_passed_by_projectile(projectile);
 
-        game_state.players.iter_mut().for_each(|(addr, player)| {
+        game_state.players.values_mut().for_each(|player| {
             if list_of_hit_coordinates.contains(&(player.x, player.y))
-                && projectile.source != addr.clone()
+                && projectile.source != player.id
             {
                 player.health = std::cmp::max(0, player.health - 20);
+
+                player.damage_inflicted_by.push(projectile.source);
                 return;
             }
         });
