@@ -1,5 +1,8 @@
 # mca-hackathon-2024
 
+There is a [write-up of how the weekend went](https://blog.felix.codes/mca-hackathon-2024),
+including the balance flaw that made the final match a draw.
+
 ## Idea
 
 This project was developed to be used during a 2 day hackathon in a small friend group.
